@@ -1,0 +1,23 @@
+{
+  "name": "missionhub-js",
+  "version": "0.0.0",
+  "authors": [
+    "Spencer Oberstadt <soberstadt@gmail.com>"
+  ],
+  "description": "A group of Angular services and directives for MissionHub",
+  "moduleType": [
+    "globals"
+  ],
+  "license": "MIT",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "angular": "~1.4.3"
+  },
+  "directory": "dist"
+}
