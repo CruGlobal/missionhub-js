@@ -1,4 +1,4 @@
-angular.module('missionhub')
+angular.module('missionhub-js')
   .constant('config', {baseUrl: 'https://stage.missionhub.com/apis/v3/'})
 
   .factory('api', function($rootScope, $resource, $q, loginDetails, config, personCache, organizationCache, organizationListCache) {

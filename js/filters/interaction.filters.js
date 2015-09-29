@@ -1,4 +1,4 @@
-angular.module('missionhub')
+angular.module('missionhub-js')
   .filter('interactionPrimaryInitiator', function() {
     return function (interaction) {
       if (!interaction) {

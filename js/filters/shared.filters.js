@@ -1,4 +1,4 @@
-angular.module('missionhub')
+angular.module('missionhub-js')
 .filter('backgroundStyle', function(){
   return function(url) {
     return 'background-image: url(' + url + ')';

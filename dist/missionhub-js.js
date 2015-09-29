@@ -1,6 +1,6 @@
-angular.module('missionhub')
+angular.module('missionhub-js')
   .constant('config', {baseUrl: 'https://stage.missionhub.com/apis/v3/'})
-  
+
   .factory('api', function($rootScope, $resource, $q, loginDetails, config, personCache, organizationCache, organizationListCache) {
     // put const here
     var that = this;
@@ -128,7 +128,7 @@ angular.module('missionhub')
     };
   });
 
-angular.module('missionhub')
+angular.module('missionhub-js')
   .factory('personCache', function() {
     // set up variables and constants
     var cachedPeople = {};
@@ -194,7 +194,7 @@ angular.module('missionhub')
     }
   });
 
-angular.module('missionhub')
+angular.module('missionhub-js')
   .filter('interactionPrimaryInitiator', function() {
     return function (interaction) {
       if (!interaction) {
@@ -210,7 +210,7 @@ angular.module('missionhub')
       return {};
     };
   });
-angular.module('missionhub')
+angular.module('missionhub-js')
   .filter('personAvatar', function() {
     return function (person, size) {
       size = size || 40;
@@ -257,7 +257,7 @@ angular.module('missionhub')
     };
   });
 
-angular.module('missionhub')
+angular.module('missionhub-js')
 .filter('backgroundStyle', function(){
   return function(url) {
     return 'background-image: url(' + url + ')';

@@ -1,4 +1,4 @@
-angular.module('missionhub')
+angular.module('missionhub-js')
   .factory('personCache', function() {
     // set up variables and constants
     var cachedPeople = {};

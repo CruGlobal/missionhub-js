@@ -1,4 +1,4 @@
-angular.module('missionhub')
+angular.module('missionhub-js')
   .filter('personAvatar', function() {
     return function (person, size) {
       size = size || 40;
