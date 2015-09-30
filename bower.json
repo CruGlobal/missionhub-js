@@ -1,6 +1,6 @@
 {
   "name": "missionhub-js",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "authors": [
     "Cru <apps@cru.org>"
   ],
@@ -17,5 +17,8 @@
     "tests"
   ],
   "main": "dist/missionhub.js",
-  "directory": "dist"
+  "directory": "dist",
+  "dependencies": {
+    "angular-resource": "1.4.3"
+  }
 }
