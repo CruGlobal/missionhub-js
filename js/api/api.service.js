@@ -65,7 +65,7 @@ angular.module('missionhub-js')
         });
       }, function(error) {
         alert('Requesting your data failed due to: ' + error);
-          mePromise.reject(error);
+        mePromise.reject(error);
       });
       return mePromise.promise;
     }
@@ -81,8 +81,30 @@ angular.module('missionhub-js')
       return promise;
     }
 
+    function getPersonWithInfo(id) {
+      var includes = ['organizational_permission' ,'permission', 'organizational_labels', 'label', 'email_addresses', 'phone_numbers', 'addresses'];
+      return getPeople({id: id, include: includes.join()});
+    }
+
+    function getPersonWithSurveyAnswers(id) {
+      var includes = ['answer_sheets', 'answers'];
+      return getPeople({id: id, include: includes.join()});
+    }
+
+    function getPersonWithEverything(id) {
+      var includes = ['organizational_permission' ,'permission', 'organizational_labels', 'label', 'email_addresses', 'phone_numbers', 'addresses', 'answer_sheets', 'answers', 'interactions', 'interaction_type'];
+      return getPeople({id: id, include: includes.join()});
+    }
+
     function getInteractions(options) {
       return mhResource('interactions', options);
+    }
+
+    function getInteractionsForPerson(id) {
+      var filters = {'filters[people_ids]': id};
+      var includes = ['initiators', 'interaction_type', 'receiver', 'creator', 'last_updater'];
+      var options = angular.extend({include: includes.join()}, filters);
+      return getInteractions(options);
     }
 
     function getOrganizations(options) {
@@ -93,12 +115,16 @@ angular.module('missionhub-js')
     return {
       currentPerson: currentPerson,
       currentOrg: currentOrg,
-      getMe: getMe,
       people: {
-        get: getPeople
+        get: getPeople,
+        getMe: getMe,
+        getPersonWithEverything: getPersonWithEverything,
+        getPersonWithInfo: getPersonWithInfo,
+        getPersonWithSurveyAnswers: getPersonWithSurveyAnswers
       },
       interactions: {
-        get: getInteractions
+        get: getInteractions,
+        getInteractionsForPerson: getInteractionsForPerson
       },
       organizations: {
         get: getOrganizations
