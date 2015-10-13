@@ -18,7 +18,7 @@ gulp.task('js', function () {
 
 gulp.task('default', ['js']);
 
-gulp.task("watch", function() {
+gulp.task("watch", ['js'], function() {
   // calls "build-js" whenever anything changes
   gulp.watch(js_src_path, ["js"]);
 });

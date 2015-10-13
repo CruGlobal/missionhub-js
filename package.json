@@ -1,7 +1,7 @@
 {
   "name": "missionhub-js",
   "version": "0.0.1",
-  "description": "",
+  "description": "A group of Angular services and directives for MissionHub",
   "main": "gulpfile.js",
   "devDependencies": {
     "gulp": "^3.9.0",

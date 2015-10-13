@@ -16,9 +16,9 @@
     "test",
     "tests"
   ],
-  "main": "dist/missionhub.js",
+  "main": "dist/missionhub-js.js",
   "directory": "dist",
   "dependencies": {
-    "angular-resource": "1.4.3"
+    "angular-resource": "~1.4.0"
   }
 }
