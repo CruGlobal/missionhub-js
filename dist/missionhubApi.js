@@ -357,35 +357,35 @@
 
 })();
 
+
 (function() {
   'use strict';
 
   angular
     .module('missionhub.api')
-    .factory('loginDetails', loginDetailsService);
+    .factory('customLoginDetails', customLoginDetailsService);
 
   /** @ngInject */
-  function loginDetailsService() {
+  function customLoginDetailsService($window) {
     var tokenStorageKey = 'facebook_token';
-
-    function token(value) {
-      if(value !== undefined) {
-        if(value) {
-          localStorage.setItem(tokenStorageKey, value);
-        }
-        else {
-          localStorage.removeItem(tokenStorageKey);
-        }
-      }
-      else {
-        return localStorage.getItem(tokenStorageKey);
-      }
-    }
 
     return {
       token: token
     };
+
+    function token(value) {
+      if(value !== undefined) {
+        if(value) {
+          $window.localStorage.setItem(tokenStorageKey, value);
+        }else{
+          $window.localStorage.removeItem(tokenStorageKey);
+        }
+      }else{
+        return $window.localStorage.getItem(tokenStorageKey);
+      }
+    }
   }
+  customLoginDetailsService.$inject = ["$window"];
 })();
 
 (function() {
@@ -406,17 +406,16 @@
           return apiConfig.baseUrl;
         },
         set: function (value) {
-          console.log('setting baseUrl:', value);
           apiConfig.baseUrl = value;
         }
       }
     });
 
-    apiService.$inject = ["$rootScope", "$resource", "$q", "$log", "loginDetails", "personCache", "organizationCache", "organizationListCache"];
+    apiService.$inject = ["$rootScope", "$resource", "$q", "$log", "customLoginDetails", "personCache", "organizationCache", "organizationListCache"];
     return providerFactory;
 
     /** @ngInject */
-    function apiService($rootScope, $resource, $q, $log, loginDetails, personCache, organizationCache, organizationListCache) {
+    function apiService($rootScope, $resource, $q, $log, customLoginDetails, personCache, organizationCache, organizationListCache) {
       var model = {};
 
       // return interface
@@ -441,7 +440,7 @@
       return factory;
 
       function mhResource(endpoint, options) {
-        if (!loginDetails.token()) {
+        if (!facebook_token.token()) {
           var deferred = $q.defer();
           deferred.resolve({endpoint: []});
           return deferred.promise;
@@ -457,7 +456,7 @@
       }
 
       function facebook_token() {
-        return loginDetails.token();
+        return customLoginDetails.token();
       }
 
       function currentPerson() {

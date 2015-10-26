@@ -16,7 +16,6 @@
           return apiConfig.baseUrl;
         },
         set: function (value) {
-          console.log('setting baseUrl:', value);
           apiConfig.baseUrl = value;
         }
       }
@@ -25,7 +24,7 @@
     return providerFactory;
 
     /** @ngInject */
-    function apiService($rootScope, $resource, $q, $log, loginDetails, personCache, organizationCache, organizationListCache) {
+    function apiService($rootScope, $resource, $q, $log, customLoginDetails, personCache, organizationCache, organizationListCache) {
       var model = {};
 
       // return interface
@@ -50,7 +49,7 @@
       return factory;
 
       function mhResource(endpoint, options) {
-        if (!loginDetails.token()) {
+        if (!facebook_token.token()) {
           var deferred = $q.defer();
           deferred.resolve({endpoint: []});
           return deferred.promise;
@@ -66,7 +65,7 @@
       }
 
       function facebook_token() {
-        return loginDetails.token();
+        return customLoginDetails.token();
       }
 
       function currentPerson() {
