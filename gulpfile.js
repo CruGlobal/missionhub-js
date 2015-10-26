@@ -1,24 +1,29 @@
+/**
+ *  Welcome to your gulpfile!
+ *  The gulp tasks are split into several files in the gulp directory
+ *  because putting all here was really too long
+ */
+
+'use strict';
+
 var gulp = require('gulp');
-var concat = require('gulp-concat');
-var rename = require('gulp-rename');
-var uglify = require('gulp-uglify');
-var watch = require('gulp-watch');
+var wrench = require('wrench');
 
-var js_src_path = 'js/**/*.js';
-var output_path = 'dist'
-
-gulp.task('js', function () {
-  return gulp.src(js_src_path)
-    .pipe(concat('missionhub-js.js'))
-    .pipe(gulp.dest(output_path))
-    .pipe(uglify())
-    .pipe(rename({ extname: '.min.js' }))
-    .pipe(gulp.dest(output_path));
+/**
+ *  This will load all js or coffee files in the gulp directory
+ *  in order to load all gulp tasks
+ */
+wrench.readdirSyncRecursive('./gulp').filter(function(file) {
+  return (/\.(js|coffee)$/i).test(file);
+}).map(function(file) {
+  require('./gulp/' + file);
 });
 
-gulp.task('default', ['js']);
 
-gulp.task("watch", ['js'], function() {
-  // calls "build-js" whenever anything changes
-  gulp.watch(js_src_path, ["js"]);
+/**
+ *  Default task clean temporaries directories and launch the
+ *  main optimization build task
+ */
+gulp.task('default', ['clean'], function () {
+  gulp.start('build');
 });
