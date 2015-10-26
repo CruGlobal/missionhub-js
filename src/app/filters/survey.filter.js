@@ -1,5 +1,12 @@
-angular.module('missionhub-js')
-  .filter('surveyName', function(api, lodash) {
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api.filters')
+    .filter('surveyName', surveyName);
+
+  /** @ngInject */
+  function surveyName(api, lodash) {
     return function (answerSheet) {
       if (!answerSheet) {
         return '';
@@ -10,4 +17,5 @@ angular.module('missionhub-js')
 
       return lodash.result(survey, 'title', '');
     };
-  });
+  }
+})();

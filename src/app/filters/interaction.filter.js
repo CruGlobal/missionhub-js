@@ -1,5 +1,12 @@
-angular.module('missionhub-js')
-  .filter('interactionPrimaryInitiator', function() {
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api.filters')
+    .filter('interactionPrimaryInitiator', interactionPrimaryInitiator);
+
+  /** @ngInject */
+  function interactionPrimaryInitiator() {
     return function (interaction) {
       if (!interaction) {
         return {};
@@ -13,4 +20,5 @@ angular.module('missionhub-js')
 
       return {};
     };
-  });
+  }
+})();
