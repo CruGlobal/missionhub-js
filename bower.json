@@ -19,6 +19,8 @@
   "main": "dist/missionhubApi.js",
   "directory": "dist",
   "dependencies": {
+    "angular": "~1.4.0",
+    "angular-local-storage": "~0.2.3",
     "angular-resource": "~1.4.0"
   },
   "devDependencies": {

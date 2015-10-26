@@ -6,7 +6,8 @@
       'ngResource',
 
       'missionhub.api.cache',
-      'missionhub.api.filters'
+      'missionhub.api.filters',
+      'missionhub.api.utils'
     ]);
 
 })();

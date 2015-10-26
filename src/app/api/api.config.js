@@ -6,8 +6,8 @@
     .config(config);
 
   /** @ngInject */
-  function config() {
-
+  function config(localStorageServiceProvider) {
+    localStorageServiceProvider.setPrefix('mh.user');
   }
 
 })();

@@ -3,7 +3,7 @@
   'use strict';
 
   angular
-    .module('missionhub.api')
+    .module('missionhub.api.utils')
     .factory('customLoginDetails', customLoginDetailsService);
 
   /** @ngInject */

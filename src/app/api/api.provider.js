@@ -49,7 +49,7 @@
       return factory;
 
       function mhResource(endpoint, options) {
-        if (!facebook_token.token()) {
+        if (!facebook_token()) {
           var deferred = $q.defer();
           deferred.resolve({endpoint: []});
           return deferred.promise;
