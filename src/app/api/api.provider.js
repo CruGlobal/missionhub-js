@@ -5,7 +5,8 @@
     .module('missionhub.api')
     .provider('api', apiProvider);
 
-  function apiProvider(apiConfig) {
+  /** @ngInject */
+  function apiProvider(apiConfig, RestangularProvider) {
     var providerFactory = {
       $get: apiService
     };
@@ -17,6 +18,7 @@
         },
         set: function (value) {
           apiConfig.baseUrl = value;
+          RestangularProvider.setBaseUrl(value);
         }
       }
     });
@@ -26,10 +28,9 @@
     /** @ngInject */
     function apiService(mhResource, people, organizations, interactions) {
       var factory = {
-        baseUrl: providerFactory.baseUrl,
+        baseUrl: providerFactory.baseUrl, //TODO: remove if not needed
 
         currentPerson: people.currentPerson,
-        currentOrg: organizations.currentOrg,
         people: {
           get: people.getPeople,
           getMe: people.getMe,
@@ -42,7 +43,8 @@
           getInteractionsForPerson: interactions.getInteractionsForPerson
         },
         organizations: {
-          get: organizations.getOrganizations
+          all: organizations.getOrganizations,
+          current: organizations.getCurrentOrganization
         }
       };
 

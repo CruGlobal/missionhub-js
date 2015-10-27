@@ -42,6 +42,77 @@ function MyController(api, userDetails) {
 }
 ```
 
+# API Reference
+## API Service
+### Organizations
+- [`api.organizations.all()`](#apiorganizationsall)
+- [`api.organizations.current()`](#apiorganizationscurrent)
+
+## User Details Service
+- `userDetails.getFirstName()`
+- `userDetails.setFirstName(value)`
+- `userDetails.getLastName()`
+- `userDetails.setLastName(value)`
+- `userDetails.getPersonId()`
+- `userDetails.setPersonId(value)`
+- `userDetails.getProfilePicture()`
+- `userDetails.setProfilePicture(value)`
+- `userDetails.getCurrentOrganization()`
+- `userDetails.setCurrentOrganization(value)`
+- `userDetails.clearAll()`
+
+#### `api.organizations.all()`
+Return all organizations that the user has access to.
+
+##### Usage:
+```JavaScript
+api.organizations.all()
+  .then(function(response){
+    //response contains an array of organization objects
+  });
+```
+
+##### Response
+```JSON
+[
+  {
+    "id": 8953,
+    "name": "Test",
+    "terminology": "Organization",
+    "ancestry": null,
+    "show_sub_orgs": true,
+    "status": "active",
+    "created_at": "2015-10-20T12:05:11-03:00",
+    "updated_at": "2015-10-20T12:05:11-03:00"
+  }
+]
+```
+
+#### `api.organizations.current()`
+Return the current organization. Current organization id is loaded from `userDetails.getCurrentOrganization()`
+
+##### Usage:
+```JavaScript
+api.organizations.current()
+  .then(function(response){
+    //response contains the organization object
+  });
+```
+
+##### Response
+```JSON
+{
+  "id": 8953,
+  "name": "Test",
+  "terminology": "Organization",
+  "ancestry": null,
+  "show_sub_orgs": true,
+  "status": "active",
+  "created_at": "2015-10-20T12:05:11-03:00",
+  "updated_at": "2015-10-20T12:05:11-03:00"
+}
+```
+
 ## Development
 ### Environment Setup
 1. Install NodeJS. This will vary depending on your Operating System.
