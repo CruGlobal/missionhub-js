@@ -1,4 +1,6 @@
 # MissionHub AngularJS API Client
+[![Build Status](https://travis-ci.org/CruGlobal/missionhub-js.svg?branch=master)](https://travis-ci.org/CruGlobal/missionhub-js)
+[![Coverage Status](https://coveralls.io/repos/CruGlobal/missionhub-js/badge.svg?branch=master&service=github)](https://coveralls.io/github/CruGlobal/missionhub-js?branch=master)
 ## Installation
 To install this package in your AngularJS app run:
 ```bash
