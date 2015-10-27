@@ -2,7 +2,170 @@
   'use strict';
 
   angular
+    .module('missionhub.api', [
+      'missionhub.api.cache',
+      'missionhub.api.filters',
+      'missionhub.api.utils'
+    ]);
+
+})();
+
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api')
+    .factory('people', peopleService);
+
+    function peopleService($log, mhResource) {
+      var model = {};
+
+      var factory = {
+        currentPerson: currentPerson,
+        getMe: getMe,
+        getPeople: getPeople,
+        getPersonWithInfo: getPersonWithInfo,
+        getPersonWithSurveyAnswers: getPersonWithSurveyAnswers,
+        getPersonWithEverything: getPersonWithEverything
+      };
+      return factory;
+
+      function currentPerson() {
+        return personCache.person(model.currentPersonId);
+      }
+
+      function getMe() {
+        var includes = ['all_organization_and_children', 'all_organizational_permissions', 'user', 'organizational_permission', 'permission', 'organizational_labels', 'label', 'interactions', 'email_addresses', 'phone_numbers', 'addresses'];
+        var mePromise = $q.defer();
+        getPeople({id: 'me', include: includes.join()})
+          .then(function (data) {
+            var me = data.person;
+            model.currentPersonId = me.id;
+            personCache.person(me);
+            organizationListCache.list(me.all_organization_and_children);
+            currentOrg({id: me.user.primary_organization_id}).then(function () {
+              mePromise.resolve(me);
+            }, function (error) {
+              mePromise.reject(error);
+            });
+          }, function (error) {
+            $log.error('Requesting your data failed due to: ' + error);
+            mePromise.reject(error);
+          });
+        return mePromise.promise;
+      }
+
+      function getPeople(options) {
+        var promise = mhResource.mhResource('people', options);
+        promise.then(function (data) {
+          // save to cache now
+          angular.forEach(data.people, function (person) {
+            personCache.person(person);
+          });
+        });
+        return promise;
+      }
+
+      function getPersonWithInfo(id) {
+        var includes = ['organizational_permission', 'permission', 'organizational_labels', 'label', 'email_addresses', 'phone_numbers', 'addresses'];
+        return getPeople({id: id, include: includes.join()});
+      }
+
+      function getPersonWithSurveyAnswers(id) {
+        var includes = ['answer_sheets', 'answers'];
+        return getPeople({id: id, include: includes.join()});
+      }
+
+      function getPersonWithEverything(id) {
+        var includes = ['organizational_permission', 'permission', 'organizational_labels', 'label', 'email_addresses', 'phone_numbers', 'addresses', 'answer_sheets', 'answers', 'interactions', 'interaction_type'];
+        return getPeople({id: id, include: includes.join()});
+      }
+    }
+    peopleService.$inject = ["$log", "mhResource"];
+
+})();
+
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api')
+    .factory('organizations', organizationsService);
+
+    function organizationsService($rootScope, $log, organizationCache, mhResource) {
+      var model = {};
+
+      var factory = {
+        currentOrg: currentOrg,
+        getOrganizations: getOrganizations
+      };
+      return factory;
+
+      function currentOrg(org) {
+        if (!org) {
+          return organizationCache.organization(model.currentOrgId);
+        }
+        var includes = ['admins', 'users', 'surveys', 'labels', 'questions', 'interaction_types'];
+        return getOrganizations({
+          id: org.id,
+          include: includes.join(),
+          organization_id: org.id //please do not remove this line. The org request will break. This must be set so that the scope of the request is the organization with id = org.id. If you try to request an organization with a different id to organization_id it will return a 404. If organization_id is unset it will default to me.user.primary_organization_id which is fine for the first request but will prevent the user changing organizations
+        })
+          .then(function (data) {
+            var org = data.organization;
+            organizationCache.organization(org);
+            if (model.currentOrgId !== org.id) {
+              model.currentOrgId = org.id;
+              $rootScope.$broadcast('current-org-updated', org);
+            }
+          }, function (error) {
+            $log.error('Organization change failed because: ' + error.statusText);
+          });
+      }
+
+      function getOrganizations(options) {
+        return mhResource.mhResource('organizations', options);
+      }
+    }
+    organizationsService.$inject = ["$rootScope", "$log", "organizationCache", "mhResource"];
+
+})();
+
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api')
+    .factory('interactions', interactionsService);
+
+    function interactionsService(mhResource) {
+      var factory = {
+        getInteractions: getInteractions,
+        getInteractionsForPerson: getInteractionsForPerson
+      };
+      return factory;
+
+      function getInteractions(options) {
+        return mhResource.mhResource('interactions', options);
+      }
+
+      function getInteractionsForPerson(id) {
+        var filters = {'filters[people_ids]': id};
+        var includes = ['initiators', 'interaction_type', 'receiver', 'creator', 'last_updater'];
+        var options = angular.extend({include: includes.join()}, filters);
+        return getInteractions(options);
+      }
+    }
+    interactionsService.$inject = ["mhResource"];
+
+})();
+
+(function() {
+  'use strict';
+
+  angular
     .module('missionhub.api.utils', [
+      'ngResource',
       'LocalStorageModule'
     ]);
 
@@ -86,6 +249,51 @@
 
   angular
     .module('missionhub.api.utils')
+    .factory('mhResource', mhResourceService);
+
+  /** @ngInject */
+  function mhResourceService($resource, customLoginDetails) {
+    var model = {};
+
+    var factory =  {
+      mhResource: mhResource,
+      setBaseUrl: setBaseUrl
+    };
+    return factory;
+
+    function setBaseUrl(value){
+      model.baseUrl = value;
+    }
+
+    function mhResource(endpoint, options) {
+      if (false && !facebook_token()) {
+        var deferred = $q.defer();
+        deferred.resolve({endpoint: []});
+        return deferred.promise;
+      } else {
+        if (model.currentOrgId && endpoint !== 'organizations') {
+          angular.extend(options, {'organization_id': model.currentOrgId});
+        }
+        return $resource(model.baseUrl + endpoint + '/:id', {
+          id: '@id',
+          facebook_token: facebook_token()
+        }).get(options).$promise;
+      }
+    }
+
+    function facebook_token() {
+      return customLoginDetails.token();
+    }
+  }
+  mhResourceService.$inject = ["$resource", "customLoginDetails"];
+})();
+
+
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api.utils')
     .factory('customLoginDetails', customLoginDetailsService);
 
   /** @ngInject */
@@ -110,6 +318,109 @@
   }
   customLoginDetailsService.$inject = ["$window"];
 })();
+
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api.cache', []);
+
+})();
+
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api.cache')
+    .factory('personCache', personCacheService);
+
+  /** @ngInject */
+  function personCacheService() {
+    // set up variables and constants
+    var cachedPeople = {};
+
+    // define methods
+
+    // if you give person() a person object, it will cache it.
+    // if you give it an id, it will return a person object if it has it.
+    function person(newValue) {
+      if (newValue.id) {
+        cachedPeople[newValue.id] = cachedPeople[newValue.id] || {};
+        angular.merge(cachedPeople[newValue.id], newValue);
+        return true;
+      }
+      return cachedPeople[newValue];
+    }
+
+    // return interface
+    return {
+      person: person
+    };
+  }
+})();
+
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api.cache')
+    .factory('organizationCache', organizationCacheService);
+
+  /** @ngInject */
+  function organizationCacheService() {
+    // set up variables and constants
+    var cachedOrganizations = {};
+
+    // define methods
+
+    // if you give person() a person object, it will cache it.
+    // if you give it an id, it will return a person object if it has it.
+    function organization(newValue) {
+      if (newValue.id) {
+        cachedOrganizations[newValue.id] = cachedOrganizations[newValue.id] || {};
+        angular.merge(cachedOrganizations[newValue.id], newValue);
+        return true;
+      }
+      return cachedOrganizations[newValue];
+    }
+
+    // return interface
+    return {
+      organization: organization
+    };
+  }
+})();
+
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api.cache')
+    .factory('organizationListCache', organizationListCacheService);
+
+  /** @ngInject */
+  function organizationListCacheService() {
+    var cachedOrganizationList = [];
+
+    function list(newList) {
+      if (newList && newList.length) {
+        // don't override cache if list is empty
+        if (newList.length === 0) {
+          return cachedOrganizationList.length === 0;
+        }
+        cachedOrganizationList = [];
+        angular.merge(cachedOrganizationList, newList);
+        return true;
+      }
+      return angular.extend([], cachedOrganizationList);
+    }
+
+    return {
+      list: list
+    };
+  }
+})();
+
 
 (function() {
   'use strict';
@@ -358,123 +669,6 @@
   'use strict';
 
   angular
-    .module('missionhub.api.cache', []);
-
-})();
-
-(function() {
-  'use strict';
-
-  angular
-    .module('missionhub.api.cache')
-    .factory('personCache', personCacheService);
-
-  /** @ngInject */
-  function personCacheService() {
-    // set up variables and constants
-    var cachedPeople = {};
-
-    // define methods
-
-    // if you give person() a person object, it will cache it.
-    // if you give it an id, it will return a person object if it has it.
-    function person(newValue) {
-      if (newValue.id) {
-        cachedPeople[newValue.id] = cachedPeople[newValue.id] || {};
-        angular.merge(cachedPeople[newValue.id], newValue);
-        return true;
-      }
-      return cachedPeople[newValue];
-    }
-
-    // return interface
-    return {
-      person: person
-    };
-  }
-})();
-
-(function() {
-  'use strict';
-
-  angular
-    .module('missionhub.api.cache')
-    .factory('organizationCache', organizationCacheService);
-
-  /** @ngInject */
-  function organizationCacheService() {
-    // set up variables and constants
-    var cachedOrganizations = {};
-
-    // define methods
-
-    // if you give person() a person object, it will cache it.
-    // if you give it an id, it will return a person object if it has it.
-    function organization(newValue) {
-      if (newValue.id) {
-        cachedOrganizations[newValue.id] = cachedOrganizations[newValue.id] || {};
-        angular.merge(cachedOrganizations[newValue.id], newValue);
-        return true;
-      }
-      return cachedOrganizations[newValue];
-    }
-
-    // return interface
-    return {
-      organization: organization
-    };
-  }
-})();
-
-(function() {
-  'use strict';
-
-  angular
-    .module('missionhub.api.cache')
-    .factory('organizationListCache', organizationListCacheService);
-
-  /** @ngInject */
-  function organizationListCacheService() {
-    var cachedOrganizationList = [];
-
-    function list(newList) {
-      if (newList && newList.length) {
-        // don't override cache if list is empty
-        if (newList.length === 0) {
-          return cachedOrganizationList.length === 0;
-        }
-        cachedOrganizationList = [];
-        angular.merge(cachedOrganizationList, newList);
-        return true;
-      }
-      return angular.extend([], cachedOrganizationList);
-    }
-
-    return {
-      list: list
-    };
-  }
-})();
-
-
-(function() {
-  'use strict';
-
-  angular
-    .module('missionhub.api', [
-      'ngResource',
-
-      'missionhub.api.cache',
-      'missionhub.api.filters',
-      'missionhub.api.utils'
-    ]);
-
-})();
-
-(function() {
-  'use strict';
-
-  angular
     .module('missionhub.api')
     .provider('api', apiProvider);
 
@@ -494,142 +688,39 @@
       }
     });
 
-    apiService.$inject = ["$rootScope", "$resource", "$q", "$log", "customLoginDetails", "personCache", "organizationCache", "organizationListCache"];
+    apiService.$inject = ["mhResource", "people", "organizations", "interactions"];
     return providerFactory;
 
     /** @ngInject */
-    function apiService($rootScope, $resource, $q, $log, customLoginDetails, personCache, organizationCache, organizationListCache) {
-      var model = {};
-
-      // return interface
+    function apiService(mhResource, people, organizations, interactions) {
       var factory = {
-        currentPerson: currentPerson,
-        currentOrg: currentOrg,
+        baseUrl: providerFactory.baseUrl,
+
+        currentPerson: people.currentPerson,
+        currentOrg: organizations.currentOrg,
         people: {
-          get: getPeople,
-          getMe: getMe,
-          getPersonWithEverything: getPersonWithEverything,
-          getPersonWithInfo: getPersonWithInfo,
-          getPersonWithSurveyAnswers: getPersonWithSurveyAnswers
+          get: people.getPeople,
+          getMe: people.getMe,
+          getPersonWithEverything: people.getPersonWithEverything,
+          getPersonWithInfo: people.getPersonWithInfo,
+          getPersonWithSurveyAnswers: people.getPersonWithSurveyAnswers
         },
         interactions: {
-          get: getInteractions,
-          getInteractionsForPerson: getInteractionsForPerson
+          get: interactions.getInteractions,
+          getInteractionsForPerson: interactions.getInteractionsForPerson
         },
         organizations: {
-          get: getOrganizations
+          get: organizations.getOrganizations
         }
       };
+
+      activate();
+
+      function activate(){
+        mhResource.setBaseUrl(factory.baseUrl);
+      }
+
       return factory;
-
-      function mhResource(endpoint, options) {
-        if (!facebook_token()) {
-          var deferred = $q.defer();
-          deferred.resolve({endpoint: []});
-          return deferred.promise;
-        } else {
-          if (model.currentOrgId && endpoint !== 'organizations') {
-            angular.extend(options, {'organization_id': model.currentOrgId});
-          }
-          return $resource(providerFactory.baseUrl + endpoint + '/:id', {
-            id: '@id',
-            facebook_token: facebook_token()
-          }).get(options).$promise;
-        }
-      }
-
-      function facebook_token() {
-        return customLoginDetails.token();
-      }
-
-      function currentPerson() {
-        return personCache.person(model.currentPersonId);
-      }
-
-      function currentOrg(org) {
-        if (!org) {
-          return organizationCache.organization(model.currentOrgId);
-        }
-        var includes = ['admins', 'users', 'surveys', 'labels', 'questions', 'interaction_types'];
-        return getOrganizations({
-          id: org.id,
-          include: includes.join(),
-          organization_id: org.id //please do not remove this line. The org request will break. This must be set so that the scope of the request is the organization with id = org.id. If you try to request an organization with a different id to organization_id it will return a 404. If organization_id is unset it will default to me.user.primary_organization_id which is fine for the first request but will prevent the user changing organizations
-        })
-          .then(function (data) {
-            var org = data.organization;
-            organizationCache.organization(org);
-            if (model.currentOrgId !== org.id) {
-              model.currentOrgId = org.id;
-              $rootScope.$broadcast('current-org-updated', org);
-            }
-          }, function (error) {
-            $log.error('Organization change failed because: ' + error.statusText);
-          });
-      }
-
-      //define methods
-      function getMe() {
-        var includes = ['all_organization_and_children', 'all_organizational_permissions', 'user', 'organizational_permission', 'permission', 'organizational_labels', 'label', 'interactions', 'email_addresses', 'phone_numbers', 'addresses'];
-        var mePromise = $q.defer();
-        getPeople({id: 'me', include: includes.join()})
-          .then(function (data) {
-            var me = data.person;
-            model.currentPersonId = me.id;
-            personCache.person(me);
-            organizationListCache.list(me.all_organization_and_children);
-            currentOrg({id: me.user.primary_organization_id}).then(function () {
-              mePromise.resolve(me);
-            }, function (error) {
-              mePromise.reject(error);
-            });
-          }, function (error) {
-            $log.error('Requesting your data failed due to: ' + error);
-            mePromise.reject(error);
-          });
-        return mePromise.promise;
-      }
-
-      function getPeople(options) {
-        var promise = mhResource('people', options);
-        promise.then(function (data) {
-          // save to cache now
-          angular.forEach(data.people, function (person) {
-            personCache.person(person);
-          });
-        });
-        return promise;
-      }
-
-      function getPersonWithInfo(id) {
-        var includes = ['organizational_permission', 'permission', 'organizational_labels', 'label', 'email_addresses', 'phone_numbers', 'addresses'];
-        return getPeople({id: id, include: includes.join()});
-      }
-
-      function getPersonWithSurveyAnswers(id) {
-        var includes = ['answer_sheets', 'answers'];
-        return getPeople({id: id, include: includes.join()});
-      }
-
-      function getPersonWithEverything(id) {
-        var includes = ['organizational_permission', 'permission', 'organizational_labels', 'label', 'email_addresses', 'phone_numbers', 'addresses', 'answer_sheets', 'answers', 'interactions', 'interaction_type'];
-        return getPeople({id: id, include: includes.join()});
-      }
-
-      function getInteractions(options) {
-        return mhResource('interactions', options);
-      }
-
-      function getInteractionsForPerson(id) {
-        var filters = {'filters[people_ids]': id};
-        var includes = ['initiators', 'interaction_type', 'receiver', 'creator', 'last_updater'];
-        var options = angular.extend({include: includes.join()}, filters);
-        return getInteractions(options);
-      }
-
-      function getOrganizations(options) {
-        return mhResource('organizations', options);
-      }
     }
   }
   apiProvider.$inject = ["apiConfig"];
