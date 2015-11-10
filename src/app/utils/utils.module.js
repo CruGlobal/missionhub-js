@@ -3,7 +3,6 @@
 
   angular
     .module('missionhub.api.utils', [
-      'ngResource',
       'LocalStorageModule'
     ]);
 

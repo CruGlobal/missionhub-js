@@ -2,178 +2,7 @@
   'use strict';
 
   angular
-    .module('missionhub.api', [
-      'restangular',
-
-      'missionhub.api.cache',
-      'missionhub.api.filters',
-      'missionhub.api.utils'
-    ]);
-
-})();
-
-(function() {
-  'use strict';
-
-  angular
-    .module('missionhub.api')
-    .factory('people', peopleService);
-
-    function peopleService($log, mhResource) {
-      var model = {};
-
-      var factory = {
-        currentPerson: currentPerson,
-        getMe: getMe,
-        getPeople: getPeople,
-        getPersonWithInfo: getPersonWithInfo,
-        getPersonWithSurveyAnswers: getPersonWithSurveyAnswers,
-        getPersonWithEverything: getPersonWithEverything
-      };
-      return factory;
-
-      function currentPerson() {
-        return personCache.person(model.currentPersonId);
-      }
-
-      function getMe() {
-        var includes = ['all_organization_and_children', 'all_organizational_permissions', 'user', 'organizational_permission', 'permission', 'organizational_labels', 'label', 'interactions', 'email_addresses', 'phone_numbers', 'addresses'];
-        var mePromise = $q.defer();
-        getPeople({id: 'me', include: includes.join()})
-          .then(function (data) {
-            var me = data.person;
-            model.currentPersonId = me.id;
-            personCache.person(me);
-            organizationListCache.list(me.all_organization_and_children);
-            currentOrg({id: me.user.primary_organization_id}).then(function () {
-              mePromise.resolve(me);
-            }, function (error) {
-              mePromise.reject(error);
-            });
-          }, function (error) {
-            $log.error('Requesting your data failed due to: ' + error);
-            mePromise.reject(error);
-          });
-        return mePromise.promise;
-      }
-
-      function getPeople(options) {
-        var promise = mhResource.mhResource('people', options);
-        promise.then(function (data) {
-          // save to cache now
-          angular.forEach(data.people, function (person) {
-            personCache.person(person);
-          });
-        });
-        return promise;
-      }
-
-      function getPersonWithInfo(id) {
-        var includes = ['organizational_permission', 'permission', 'organizational_labels', 'label', 'email_addresses', 'phone_numbers', 'addresses'];
-        return getPeople({id: id, include: includes.join()});
-      }
-
-      function getPersonWithSurveyAnswers(id) {
-        var includes = ['answer_sheets', 'answers'];
-        return getPeople({id: id, include: includes.join()});
-      }
-
-      function getPersonWithEverything(id) {
-        var includes = ['organizational_permission', 'permission', 'organizational_labels', 'label', 'email_addresses', 'phone_numbers', 'addresses', 'answer_sheets', 'answers', 'interactions', 'interaction_type'];
-        return getPeople({id: id, include: includes.join()});
-      }
-    }
-    peopleService.$inject = ["$log", "mhResource"];
-
-})();
-
-(function() {
-  'use strict';
-
-  angular
-    .module('missionhub.api')
-    .factory('organizations', organizationsService);
-
-  function organizationsService(userDetails, Restangular) {
-    var factory = {
-      getCurrentOrganization: getCurrentOrganization,
-      getOrganizations: getOrganizations
-    };
-    return factory;
-
-    /*function getCurrentOrgOld(org) {
-      if (!org) {
-        return organizationCache.organization(model.currentOrgId);
-      }
-      var includes = ['admins', 'users', 'surveys', 'labels', 'questions', 'interaction_types'];
-      return getOrganizations({
-        id: org.id,
-        include: includes.join(),
-        organization_id: org.id //please do not remove this line. The org request will break. This must be set so that the scope of the request is the organization with id = org.id. If you try to request an organization with a different id to organization_id it will return a 404. If organization_id is unset it will default to me.user.primary_organization_id which is fine for the first request but will prevent the user changing organizations
-      })
-        .then(function (data) {
-          var org = data.organization;
-          organizationCache.organization(org);
-          if (model.currentOrgId !== org.id) {
-            model.currentOrgId = org.id;
-            $rootScope.$broadcast('current-org-updated', org);
-          }
-        }, function (error) {
-          $log.error('Organization change failed because: ' + error.statusText);
-        });
-    }*/
-
-    function getCurrentOrganization(){
-      return Restangular.one('organizations', userDetails.getCurrentOrganization()).get().then(function (data){
-        return data.organization;
-      });
-    }
-
-    function getOrganizations(options) {
-      return Restangular.all('organizations').customGET().then(function (data){
-        return data.organizations;
-      });
-    }
-  }
-  organizationsService.$inject = ["userDetails", "Restangular"];
-
-})();
-
-(function() {
-  'use strict';
-
-  angular
-    .module('missionhub.api')
-    .factory('interactions', interactionsService);
-
-    function interactionsService(mhResource) {
-      var factory = {
-        getInteractions: getInteractions,
-        getInteractionsForPerson: getInteractionsForPerson
-      };
-      return factory;
-
-      function getInteractions(options) {
-        return mhResource.mhResource('interactions', options);
-      }
-
-      function getInteractionsForPerson(id) {
-        var filters = {'filters[people_ids]': id};
-        var includes = ['initiators', 'interaction_type', 'receiver', 'creator', 'last_updater'];
-        var options = angular.extend({include: includes.join()}, filters);
-        return getInteractions(options);
-      }
-    }
-    interactionsService.$inject = ["mhResource"];
-
-})();
-
-(function() {
-  'use strict';
-
-  angular
     .module('missionhub.api.utils', [
-      'ngResource',
       'LocalStorageModule'
     ]);
 
@@ -251,80 +80,96 @@
   userDetailsService.$inject = ["localStorageService"];
 })();
 
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api', [
+      'restangular',
+
+      'missionhub.api.cache',
+      'missionhub.api.filters',
+      'missionhub.api.utils'
+    ]);
+
+})();
 
 (function() {
   'use strict';
 
   angular
-    .module('missionhub.api.utils')
-    .factory('mhResource', mhResourceService);
+    .module('missionhub.api')
+    .factory('people', peopleService);
 
-  /** @ngInject */
-  function mhResourceService($resource, customLoginDetails) {
-    var model = {};
-
-    var factory =  {
-      mhResource: mhResource,
-      setBaseUrl: setBaseUrl
+  function peopleService(organizations, userDetails) {
+    var factory = {
+      all: getAll,
+      get: get,
+      getWithEmails: getWithEmails,
+      getWithInteractions: getWithInteractions,
+      current: getCurrent
     };
     return factory;
 
-    function setBaseUrl(value){
-      model.baseUrl = value;
+    function getAll(){
+      return organizations.currentRestangular().all('people').getList();
     }
 
-    function mhResource(endpoint, options) {
-      if (false && !facebook_token()) {
-        var deferred = $q.defer();
-        deferred.resolve({endpoint: []});
-        return deferred.promise;
-      } else {
-        if (model.currentOrgId && endpoint !== 'organizations') {
-          angular.extend(options, {'organization_id': model.currentOrgId});
-        }
-        return $resource(model.baseUrl + endpoint + '/:id', {
-          id: '@id',
-          facebook_token: facebook_token()
-        }).get(options).$promise;
-      }
+    function get(id){
+      return organizations.currentRestangular().one('people', id).get();
     }
 
-    function facebook_token() {
-      return customLoginDetails.token();
+    function getCurrent(){
+      return organizations.currentRestangular().one('people', userDetails.getPersonId()).get();
+    }
+
+    function getWithEmails(id){
+      return organizations.currentRestangular().one('people', id).get({include: 'email_addresses'});
+    }
+
+    function getWithInteractions(id){
+      return organizations.currentRestangular().one('people', id).get({include: 'interactions'});
     }
   }
-  mhResourceService.$inject = ["$resource", "customLoginDetails"];
-})();
+  peopleService.$inject = ["organizations", "userDetails"];
 
+})();
 
 (function() {
   'use strict';
 
   angular
-    .module('missionhub.api.utils')
-    .factory('customLoginDetails', customLoginDetailsService);
+    .module('missionhub.api')
+    .factory('organizations', organizationsService);
 
-  /** @ngInject */
-  function customLoginDetailsService($window) {
-    var tokenStorageKey = 'facebook_token';
+  function organizationsService(Restangular, userDetails) {
 
-    return {
-      token: token
+    var factory = {
+      all: getAll,
+      current: getCurrent,
+      allRestangular: allRestangular,
+      currentRestangular: currentRestangular
     };
+    return factory;
 
-    function token(value) {
-      if(value !== undefined) {
-        if(value) {
-          $window.localStorage.setItem(tokenStorageKey, value);
-        }else{
-          $window.localStorage.removeItem(tokenStorageKey);
-        }
-      }else{
-        return $window.localStorage.getItem(tokenStorageKey);
-      }
+    function getAll(){
+      return factory.allRestangular().getList();
+    }
+
+    function getCurrent(){
+      return factory.currentRestangular().get();
+    }
+
+    function allRestangular(){
+      return Restangular.all('organizations');
+    }
+
+    function currentRestangular(){
+      return Restangular.one('organizations', userDetails.getCurrentOrganization().id);
     }
   }
-  customLoginDetailsService.$inject = ["$window"];
+  organizationsService.$inject = ["Restangular", "userDetails"];
+
 })();
 
 (function() {
@@ -698,36 +543,37 @@
       }
     });
 
-    apiService.$inject = ["mhResource", "people", "organizations", "interactions"];
+    apiService.$inject = ["people", "organizations"];
     return providerFactory;
 
     /** @ngInject */
-    function apiService(mhResource, people, organizations, interactions) {
+    function apiService(people, organizations) {
       var factory = {
         baseUrl: providerFactory.baseUrl, //TODO: remove if not needed
 
-        currentPerson: people.currentPerson,
         people: {
-          get: people.getPeople,
-          getMe: people.getMe,
-          getPersonWithEverything: people.getPersonWithEverything,
-          getPersonWithInfo: people.getPersonWithInfo,
-          getPersonWithSurveyAnswers: people.getPersonWithSurveyAnswers
+          all: people.all,
+          current: people.current,
+          get: people.get/*,
+          getMe: peopleEndpoint.getMe,
+          getPersonWithEverything: peopleEndpoint.getPersonWithEverything,
+          getPersonWithInfo: peopleEndpoint.getPersonWithInfo,
+          getPersonWithSurveyAnswers: peopleEndpoint.getPersonWithSurveyAnswers*/
         },
-        interactions: {
+        /*interactions: {
           get: interactions.getInteractions,
           getInteractionsForPerson: interactions.getInteractionsForPerson
-        },
+        },*/
         organizations: {
-          all: organizations.getOrganizations,
-          current: organizations.getCurrentOrganization
+          all: organizations.all,
+          current: organizations.current
         }
       };
 
       activate();
 
       function activate(){
-        mhResource.setBaseUrl(factory.baseUrl);
+
       }
 
       return factory;
@@ -737,11 +583,13 @@
 
 })();
 
+/* global window:false */
 (function() {
   'use strict';
 
   angular
     .module('missionhub.api')
+    .constant('_', window._)
     .constant('apiConfig', {baseUrl: '/'});
 
 })();
@@ -754,9 +602,43 @@
     .config(config);
 
   /** @ngInject */
-  function config(localStorageServiceProvider) {
+  function config(localStorageServiceProvider, RestangularProvider, _) {
     localStorageServiceProvider.setPrefix('mh.user');
+
+    // Handler for JSON API includes. See:
+    // - https://github.com/mgonto/restangular/issues/877
+    // - https://gist.github.com/pywebdesign/a81755c46f041bed6cf1
+    RestangularProvider.addResponseInterceptor(function(data/*, operation, what, url, response, deferred*/) {
+      var extractedData = data.data;
+      extractedData.meta = data.meta;
+      extractedData.included = data.included;
+
+      function _apply(elem, fct){
+        if(elem !== undefined){
+          if(elem.type !== undefined){
+            fct(elem);
+          }else{
+            _.forEach(elem, function(el){
+              _apply(el, fct);
+            });
+          }
+        }
+      }
+
+      _apply(data.data, function(elem){
+        _apply(elem.relationships, function(rel){
+          rel.getIncluded = function(){
+            return _.find(extractedData.included, function(included){
+              var a = included.type === rel.type;
+              var b = included.id === rel.id;
+              return a && b;
+            });
+          };
+        });
+      });
+      return extractedData;
+    });
   }
-  config.$inject = ["localStorageServiceProvider"];
+  config.$inject = ["localStorageServiceProvider", "RestangularProvider", "_"];
 
 })();

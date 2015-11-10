@@ -22,14 +22,17 @@
         last_name: 'Smith',
         person_id: '1234',
         profile_image_url: 'someUrl',
-        recent_organization_id: '4321'
+        recent_organization: {
+          id: '4321',
+          name: 'Test'
+        }
       };
       beforeEach(function(){
         self.localStorageService.set('firstName', test_details.first_name);
         self.localStorageService.set('lastName', test_details.last_name);
         self.localStorageService.set('personId', test_details.person_id);
         self.localStorageService.set('profilePicture', test_details.profile_image_url);
-        self.localStorageService.set('currentOrganization', test_details.recent_organization_id);
+        self.localStorageService.set('currentOrganization', test_details.recent_organization);
       });
       describe('firstName getters and setters', function(){
         it('should return the user\'s first name', function(){
@@ -69,11 +72,15 @@
       });
       describe('currentOrg getters and setters', function(){
         it('should return the user\'s current org', function(){
-          expect(self.userDetails.getCurrentOrganization()).toEqual(test_details.recent_organization_id);
+          expect(self.userDetails.getCurrentOrganization()).toEqual(test_details.recent_organization);
         });
         it('should change the user\'s current org', function(){
-          self.userDetails.setCurrentOrganization('newOrg');
-          expect(self.userDetails.getCurrentOrganization()).toEqual('newOrg');
+          var newOrg = {
+            id: 2,
+            name: 'New Org'
+          };
+          self.userDetails.setCurrentOrganization(newOrg);
+          expect(self.userDetails.getCurrentOrganization()).toEqual(newOrg);
         });
       });
       describe('clearAll function', function(){

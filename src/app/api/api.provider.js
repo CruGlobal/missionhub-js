@@ -26,32 +26,33 @@
     return providerFactory;
 
     /** @ngInject */
-    function apiService(mhResource, people, organizations, interactions) {
+    function apiService(people, organizations) {
       var factory = {
         baseUrl: providerFactory.baseUrl, //TODO: remove if not needed
 
-        currentPerson: people.currentPerson,
         people: {
-          get: people.getPeople,
-          getMe: people.getMe,
-          getPersonWithEverything: people.getPersonWithEverything,
-          getPersonWithInfo: people.getPersonWithInfo,
-          getPersonWithSurveyAnswers: people.getPersonWithSurveyAnswers
+          all: people.all,
+          current: people.current,
+          get: people.get/*,
+          getMe: peopleEndpoint.getMe,
+          getPersonWithEverything: peopleEndpoint.getPersonWithEverything,
+          getPersonWithInfo: peopleEndpoint.getPersonWithInfo,
+          getPersonWithSurveyAnswers: peopleEndpoint.getPersonWithSurveyAnswers*/
         },
-        interactions: {
+        /*interactions: {
           get: interactions.getInteractions,
           getInteractionsForPerson: interactions.getInteractionsForPerson
-        },
+        },*/
         organizations: {
-          all: organizations.getOrganizations,
-          current: organizations.getCurrentOrganization
+          all: organizations.all,
+          current: organizations.current
         }
       };
 
       activate();
 
       function activate(){
-        mhResource.setBaseUrl(factory.baseUrl);
+
       }
 
       return factory;
