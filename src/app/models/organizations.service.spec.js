@@ -32,7 +32,7 @@
             id: 124,
             type: 'v4_organizations',
             attributes: {
-              name: 'Tes2'
+              name: 'Test2'
             }
           }
         ];
@@ -40,7 +40,18 @@
           data: responseData
         });
         self.organizations.all().then(function(data){
-          expect(data.plain()).toEqual(responseData);
+          expect(data.plain()).toEqual([
+            {
+              id: 123,
+              type: 'v4_organizations',
+              name: 'Test'
+            },
+            {
+              id: 124,
+              type: 'v4_organizations',
+              name: 'Test2'
+            }
+          ]);
         });
         self.$httpBackend.flush();
       });
@@ -62,11 +73,7 @@
           expect(data.plain()).toEqual({
             id: 123,
             type: 'v4_organizations',
-            attributes: {
-              name: 'Test'
-            },
-            meta: undefined,
-            included: undefined
+            name: 'Test'
           });
         });
         self.$httpBackend.flush();

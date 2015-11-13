@@ -43,7 +43,20 @@
           data: responseData
         });
         self.people.all().then(function(data){
-          expect(data.plain()).toEqual(responseData);
+          expect(data.plain()).toEqual([
+            {
+              id: 56,
+              type: 'v4_people',
+              first_name: 'Fname',
+              last_name: 'Lname'
+            },
+            {
+              id: 57,
+              type: 'v4_people',
+              first_name: 'Fname2',
+              last_name: 'Lname2'
+            }
+          ]);
         });
         self.$httpBackend.flush();
       });
@@ -66,12 +79,8 @@
           expect(data.plain()).toEqual({
             id: 10,
             type: 'v4_people',
-            attributes: {
-              first_name: 'Fname',
-              last_name: 'Lname'
-            },
-            meta: undefined,
-            included: undefined
+            first_name: 'Fname',
+            last_name: 'Lname'
           });
         });
         self.$httpBackend.flush();

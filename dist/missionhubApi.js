@@ -8,6 +8,16 @@
 
 })();
 
+/* global window:false */
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api.utils')
+    .constant('_', window._);
+
+})();
+
 
 (function() {
   'use strict';
@@ -78,6 +88,97 @@
     }
   }
   userDetailsService.$inject = ["localStorageService"];
+})();
+
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api.utils')
+    .provider('jsonapi', jsonapiProvider);
+
+  /** @ngInject */
+  function jsonapiProvider(_) {
+    var providerFactory = {
+      $get: jsonapiService,
+      deserialize: deserialize
+    };
+
+    return providerFactory;
+
+    /** @ngInject */
+    function jsonapiService() {
+      var factory = {
+        deserialize: deserialize,
+
+        _indexIncludes: indexIncludes,
+        _flattenData: flattenData,
+        _findRelationships: findRelationships
+      };
+      return factory;
+    }
+
+    function deserialize(json) {
+      var includesMap = indexIncludes(json.included);
+      if(_.isArray(json.data)){
+        return _(json.data)
+          .map(function (obj) {
+            return flattenData(obj, includesMap);
+          })
+          .value();
+      }else{
+        return flattenData(json.data, includesMap);
+      }
+    }
+
+    function indexIncludes(includes) {
+      return _(includes)
+      // Index by type
+        .groupBy(function (include) {
+          return include.type;
+        })
+        // Foreach type group
+        .mapValues(function (typeIncludes) {
+          return _(typeIncludes)
+          // index by id
+            .mapKeys(function (typeInclude) {
+              return typeInclude.id;
+            })
+            // Flatten include object
+            .mapValues(flattenData)
+            .value();
+        })
+        .value();
+    }
+
+    function flattenData(obj, includesMap) {
+      var flattenedObj = {};
+      flattenedObj.id = obj.id;
+      flattenedObj.type = obj.type;
+      //Move attributes to root level
+      flattenedObj = _.merge(flattenedObj, obj.attributes);
+      if (_.isObject(includesMap) && !_.isEmpty(includesMap)) {
+        // Load relationships into root level
+        flattenedObj = _.merge(flattenedObj, findRelationships(obj.relationships, includesMap));
+      }
+      return flattenedObj;
+    }
+
+    function findRelationships(relationships, includesMap) {
+      return _(relationships)
+      // Change value of each relationshipType
+        .mapValues(function (relationshipType) {
+          return _(relationshipType.data)
+          // Change each relationship in the array to the corresponding flattened includes obj
+            .map(function (relationship) {
+              return includesMap[relationship.type][relationship.id];
+            })
+            .value();
+        })
+        .value();
+    }
+  }
+  jsonapiProvider.$inject = ["_"];
 })();
 
 (function() {
@@ -602,43 +703,13 @@
     .config(config);
 
   /** @ngInject */
-  function config(localStorageServiceProvider, RestangularProvider, _) {
+  function config(localStorageServiceProvider, RestangularProvider, jsonapiProvider) {
     localStorageServiceProvider.setPrefix('mh.user');
 
-    // Handler for JSON API includes. See:
-    // - https://github.com/mgonto/restangular/issues/877
-    // - https://gist.github.com/pywebdesign/a81755c46f041bed6cf1
-    RestangularProvider.addResponseInterceptor(function(data/*, operation, what, url, response, deferred*/) {
-      var extractedData = data.data;
-      extractedData.meta = data.meta;
-      extractedData.included = data.included;
-
-      function _apply(elem, fct){
-        if(elem !== undefined){
-          if(elem.type !== undefined){
-            fct(elem);
-          }else{
-            _.forEach(elem, function(el){
-              _apply(el, fct);
-            });
-          }
-        }
-      }
-
-      _apply(data.data, function(elem){
-        _apply(elem.relationships, function(rel){
-          rel.getIncluded = function(){
-            return _.find(extractedData.included, function(included){
-              var a = included.type === rel.type;
-              var b = included.id === rel.id;
-              return a && b;
-            });
-          };
-        });
-      });
-      return extractedData;
+    RestangularProvider.addResponseInterceptor(function(data) {
+      return jsonapiProvider.deserialize(data);
     });
   }
-  config.$inject = ["localStorageServiceProvider", "RestangularProvider", "_"];
+  config.$inject = ["localStorageServiceProvider", "RestangularProvider", "jsonapiProvider"];
 
 })();
