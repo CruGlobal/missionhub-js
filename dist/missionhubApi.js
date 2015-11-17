@@ -2,6 +2,104 @@
   'use strict';
 
   angular
+    .module('missionhub.api', [
+      'restangular',
+
+      'missionhub.api.cache',
+      'missionhub.api.filters',
+      'missionhub.api.utils'
+    ]);
+
+})();
+
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api')
+    .factory('people', peopleService);
+
+  function peopleService(organizations, userDetails) {
+    var factory = {
+      all: getAll,
+      get: get,
+      getWithEmails: getWithEmails,
+      getWithInteractions: getWithInteractions,
+      current: getCurrent
+    };
+    return factory;
+
+    function getAll(order){
+      var queryParams = {};
+      if(order != undefined){
+        queryParams.order = order;
+      }
+      queryParams.include = 'person.first_name,person.email_addresses,person.phone_numbers';
+      //queryParams.include = 'person.phone_numbers';
+      return organizations.currentRestangular().all('people').getList(queryParams);
+    }
+
+    function get(id){
+      return organizations.currentRestangular().one('people', id).get();
+    }
+
+    function getCurrent(){
+      return organizations.currentRestangular().one('people', userDetails.getPersonId()).get();
+    }
+
+    function getWithEmails(id){
+      return organizations.currentRestangular().one('people', id).get({include: 'email_addresses'});
+    }
+
+    function getWithInteractions(id){
+      return organizations.currentRestangular().one('people', id).get({include: 'interactions'});
+    }
+  }
+  peopleService.$inject = ["organizations", "userDetails"];
+
+})();
+
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api')
+    .factory('organizations', organizationsService);
+
+  function organizationsService(Restangular, userDetails) {
+
+    var factory = {
+      all: getAll,
+      current: getCurrent,
+      allRestangular: allRestangular,
+      currentRestangular: currentRestangular
+    };
+    return factory;
+
+    function getAll(){
+      return factory.allRestangular().getList();
+    }
+
+    function getCurrent(){
+      return factory.currentRestangular().get();
+    }
+
+    function allRestangular(){
+      return Restangular.all('organizations');
+    }
+
+    function currentRestangular(){
+      return Restangular.one('organizations', userDetails.getCurrentOrganization().id);
+    }
+  }
+  organizationsService.$inject = ["Restangular", "userDetails"];
+
+})();
+
+(function() {
+  'use strict';
+
+  angular
     .module('missionhub.api.utils', [
       'LocalStorageModule'
     ]);
@@ -95,38 +193,32 @@
 
   angular
     .module('missionhub.api.utils')
-    .provider('jsonapi', jsonapiProvider);
+    .factory('jsonapi', jsonapiService);
 
   /** @ngInject */
-  function jsonapiProvider(_) {
-    var providerFactory = {
-      $get: jsonapiService,
-      deserialize: deserialize
+  function jsonapiService(_, $log) {
+    var factory = {
+      deserialize: deserialize,
+
+      _indexIncludes: indexIncludes,
+      _flattenData: flattenData,
+      _findRelationships: findRelationships
     };
+    var currentUrl;
+    return factory;
 
-    return providerFactory;
-
-    /** @ngInject */
-    function jsonapiService() {
-      var factory = {
-        deserialize: deserialize,
-
-        _indexIncludes: indexIncludes,
-        _flattenData: flattenData,
-        _findRelationships: findRelationships
-      };
-      return factory;
-    }
-
-    function deserialize(json) {
+    function deserialize(json, url) {
+      currentUrl = url;
       var includesMap = indexIncludes(json.included);
       if(_.isArray(json.data)){
+        // Handle array of objects
         return _(json.data)
           .map(function (obj) {
             return flattenData(obj, includesMap);
           })
           .value();
       }else{
+        // Handle single object
         return flattenData(json.data, includesMap);
       }
     }
@@ -166,111 +258,24 @@
 
     function findRelationships(relationships, includesMap) {
       return _(relationships)
-      // Change value of each relationshipType
+      // Change value of each relationshipType to be the corresponding included objects
         .mapValues(function (relationshipType) {
           return _(relationshipType.data)
           // Change each relationship in the array to the corresponding flattened includes obj
             .map(function (relationship) {
-              return includesMap[relationship.type][relationship.id];
+              if(includesMap[relationship.type] === undefined || includesMap[relationship.type][relationship.id] === undefined) {
+                $log.error('Deserializing response from', currentUrl + ': Could not load data for relationship of type', relationship.type, 'and id', relationship.id);
+                return undefined;
+              }else{
+                return includesMap[relationship.type][relationship.id];
+              }
             })
             .value();
         })
         .value();
     }
   }
-  jsonapiProvider.$inject = ["_"];
-})();
-
-(function() {
-  'use strict';
-
-  angular
-    .module('missionhub.api', [
-      'restangular',
-
-      'missionhub.api.cache',
-      'missionhub.api.filters',
-      'missionhub.api.utils'
-    ]);
-
-})();
-
-(function() {
-  'use strict';
-
-  angular
-    .module('missionhub.api')
-    .factory('people', peopleService);
-
-  function peopleService(organizations, userDetails) {
-    var factory = {
-      all: getAll,
-      get: get,
-      getWithEmails: getWithEmails,
-      getWithInteractions: getWithInteractions,
-      current: getCurrent
-    };
-    return factory;
-
-    function getAll(){
-      return organizations.currentRestangular().all('people').getList();
-    }
-
-    function get(id){
-      return organizations.currentRestangular().one('people', id).get();
-    }
-
-    function getCurrent(){
-      return organizations.currentRestangular().one('people', userDetails.getPersonId()).get();
-    }
-
-    function getWithEmails(id){
-      return organizations.currentRestangular().one('people', id).get({include: 'email_addresses'});
-    }
-
-    function getWithInteractions(id){
-      return organizations.currentRestangular().one('people', id).get({include: 'interactions'});
-    }
-  }
-  peopleService.$inject = ["organizations", "userDetails"];
-
-})();
-
-(function() {
-  'use strict';
-
-  angular
-    .module('missionhub.api')
-    .factory('organizations', organizationsService);
-
-  function organizationsService(Restangular, userDetails) {
-
-    var factory = {
-      all: getAll,
-      current: getCurrent,
-      allRestangular: allRestangular,
-      currentRestangular: currentRestangular
-    };
-    return factory;
-
-    function getAll(){
-      return factory.allRestangular().getList();
-    }
-
-    function getCurrent(){
-      return factory.currentRestangular().get();
-    }
-
-    function allRestangular(){
-      return Restangular.all('organizations');
-    }
-
-    function currentRestangular(){
-      return Restangular.one('organizations', userDetails.getCurrentOrganization().id);
-    }
-  }
-  organizationsService.$inject = ["Restangular", "userDetails"];
-
+  jsonapiService.$inject = ["_", "$log"];
 })();
 
 (function() {
@@ -644,11 +649,11 @@
       }
     });
 
-    apiService.$inject = ["people", "organizations"];
+    apiService.$inject = ["Restangular", "jsonapi", "people", "organizations"];
     return providerFactory;
 
     /** @ngInject */
-    function apiService(people, organizations) {
+    function apiService(Restangular, jsonapi, people, organizations) {
       var factory = {
         baseUrl: providerFactory.baseUrl, //TODO: remove if not needed
 
@@ -674,7 +679,9 @@
       activate();
 
       function activate(){
-
+        Restangular.addResponseInterceptor(function(data, operation, what, url) {
+          return jsonapi.deserialize(data, url);
+        });
       }
 
       return factory;
@@ -703,13 +710,9 @@
     .config(config);
 
   /** @ngInject */
-  function config(localStorageServiceProvider, RestangularProvider, jsonapiProvider) {
+  function config(localStorageServiceProvider) {
     localStorageServiceProvider.setPrefix('mh.user');
-
-    RestangularProvider.addResponseInterceptor(function(data) {
-      return jsonapiProvider.deserialize(data);
-    });
   }
-  config.$inject = ["localStorageServiceProvider", "RestangularProvider", "jsonapiProvider"];
+  config.$inject = ["localStorageServiceProvider"];
 
 })();

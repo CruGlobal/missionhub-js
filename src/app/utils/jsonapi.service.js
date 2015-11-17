@@ -3,38 +3,32 @@
 
   angular
     .module('missionhub.api.utils')
-    .provider('jsonapi', jsonapiProvider);
+    .factory('jsonapi', jsonapiService);
 
   /** @ngInject */
-  function jsonapiProvider(_) {
-    var providerFactory = {
-      $get: jsonapiService,
-      deserialize: deserialize
+  function jsonapiService(_, $log) {
+    var factory = {
+      deserialize: deserialize,
+
+      _indexIncludes: indexIncludes,
+      _flattenData: flattenData,
+      _findRelationships: findRelationships
     };
+    var currentUrl;
+    return factory;
 
-    return providerFactory;
-
-    /** @ngInject */
-    function jsonapiService() {
-      var factory = {
-        deserialize: deserialize,
-
-        _indexIncludes: indexIncludes,
-        _flattenData: flattenData,
-        _findRelationships: findRelationships
-      };
-      return factory;
-    }
-
-    function deserialize(json) {
+    function deserialize(json, url) {
+      currentUrl = url;
       var includesMap = indexIncludes(json.included);
       if(_.isArray(json.data)){
+        // Handle array of objects
         return _(json.data)
           .map(function (obj) {
             return flattenData(obj, includesMap);
           })
           .value();
       }else{
+        // Handle single object
         return flattenData(json.data, includesMap);
       }
     }
@@ -74,12 +68,17 @@
 
     function findRelationships(relationships, includesMap) {
       return _(relationships)
-      // Change value of each relationshipType
+      // Change value of each relationshipType to be the corresponding included objects
         .mapValues(function (relationshipType) {
           return _(relationshipType.data)
           // Change each relationship in the array to the corresponding flattened includes obj
             .map(function (relationship) {
-              return includesMap[relationship.type][relationship.id];
+              if(includesMap[relationship.type] === undefined || includesMap[relationship.type][relationship.id] === undefined) {
+                $log.error('Deserializing response from', currentUrl + ': Could not load data for relationship of type', relationship.type, 'and id', relationship.id);
+                return undefined;
+              }else{
+                return includesMap[relationship.type][relationship.id];
+              }
             })
             .value();
         })

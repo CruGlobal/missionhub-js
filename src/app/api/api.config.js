@@ -6,12 +6,8 @@
     .config(config);
 
   /** @ngInject */
-  function config(localStorageServiceProvider, RestangularProvider, jsonapiProvider) {
+  function config(localStorageServiceProvider) {
     localStorageServiceProvider.setPrefix('mh.user');
-
-    RestangularProvider.addResponseInterceptor(function(data) {
-      return jsonapiProvider.deserialize(data);
-    });
   }
 
 })();

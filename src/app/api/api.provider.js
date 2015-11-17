@@ -26,7 +26,7 @@
     return providerFactory;
 
     /** @ngInject */
-    function apiService(people, organizations) {
+    function apiService(Restangular, jsonapi, people, organizations) {
       var factory = {
         baseUrl: providerFactory.baseUrl, //TODO: remove if not needed
 
@@ -52,7 +52,9 @@
       activate();
 
       function activate(){
-
+        Restangular.addResponseInterceptor(function(data, operation, what, url) {
+          return jsonapi.deserialize(data, url);
+        });
       }
 
       return factory;
