@@ -2,104 +2,6 @@
   'use strict';
 
   angular
-    .module('missionhub.api', [
-      'restangular',
-
-      'missionhub.api.cache',
-      'missionhub.api.filters',
-      'missionhub.api.utils'
-    ]);
-
-})();
-
-(function() {
-  'use strict';
-
-  angular
-    .module('missionhub.api')
-    .factory('people', peopleService);
-
-  function peopleService(organizations, userDetails) {
-    var factory = {
-      all: getAll,
-      get: get,
-      getWithEmails: getWithEmails,
-      getWithInteractions: getWithInteractions,
-      current: getCurrent
-    };
-    return factory;
-
-    function getAll(order){
-      var queryParams = {};
-      if(order != undefined){
-        queryParams.order = order;
-      }
-      queryParams.include = 'person.first_name,person.email_addresses,person.phone_numbers';
-      //queryParams.include = 'person.phone_numbers';
-      return organizations.currentRestangular().all('people').getList(queryParams);
-    }
-
-    function get(id){
-      return organizations.currentRestangular().one('people', id).get();
-    }
-
-    function getCurrent(){
-      return organizations.currentRestangular().one('people', userDetails.getPersonId()).get();
-    }
-
-    function getWithEmails(id){
-      return organizations.currentRestangular().one('people', id).get({include: 'email_addresses'});
-    }
-
-    function getWithInteractions(id){
-      return organizations.currentRestangular().one('people', id).get({include: 'interactions'});
-    }
-  }
-  peopleService.$inject = ["organizations", "userDetails"];
-
-})();
-
-(function() {
-  'use strict';
-
-  angular
-    .module('missionhub.api')
-    .factory('organizations', organizationsService);
-
-  function organizationsService(Restangular, userDetails) {
-
-    var factory = {
-      all: getAll,
-      current: getCurrent,
-      allRestangular: allRestangular,
-      currentRestangular: currentRestangular
-    };
-    return factory;
-
-    function getAll(){
-      return factory.allRestangular().getList();
-    }
-
-    function getCurrent(){
-      return factory.currentRestangular().get();
-    }
-
-    function allRestangular(){
-      return Restangular.all('organizations');
-    }
-
-    function currentRestangular(){
-      return Restangular.one('organizations', userDetails.getCurrentOrganization().id);
-    }
-  }
-  organizationsService.$inject = ["Restangular", "userDetails"];
-
-})();
-
-(function() {
-  'use strict';
-
-  angular
     .module('missionhub.api.utils', [
       'LocalStorageModule'
     ]);
@@ -623,6 +525,102 @@
   }
 })();
 
+
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api', [
+      'restangular',
+
+      'missionhub.api.cache',
+      'missionhub.api.filters',
+      'missionhub.api.utils'
+    ]);
+
+})();
+
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api')
+    .factory('people', peopleService);
+
+  function peopleService(organizations, userDetails) {
+    var factory = {
+      all: getAll,
+      get: get,
+      getWithEmails: getWithEmails,
+      getWithInteractions: getWithInteractions,
+      current: getCurrent
+    };
+    return factory;
+
+    function getAll(order){
+      var queryParams = {};
+      if(order != undefined){
+        queryParams.order = order;
+      }
+      return organizations.currentRestangular().all('people').getList(queryParams);
+    }
+
+    function get(id){
+      return organizations.currentRestangular().one('people', id).get();
+    }
+
+    function getCurrent(){
+      return organizations.currentRestangular().one('people', userDetails.getPersonId()).get();
+    }
+
+    function getWithEmails(id){
+      return organizations.currentRestangular().one('people', id).get({include: 'email_addresses'});
+    }
+
+    function getWithInteractions(id){
+      return organizations.currentRestangular().one('people', id).get({include: 'interactions'});
+    }
+  }
+  peopleService.$inject = ["organizations", "userDetails"];
+
+})();
+
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api')
+    .factory('organizations', organizationsService);
+
+  function organizationsService(Restangular, userDetails) {
+
+    var factory = {
+      all: getAll,
+      current: getCurrent,
+      allRestangular: allRestangular,
+      currentRestangular: currentRestangular
+    };
+    return factory;
+
+    function getAll(){
+      return factory.allRestangular().getList();
+    }
+
+    function getCurrent(){
+      return factory.currentRestangular().get();
+    }
+
+    function allRestangular(){
+      return Restangular.all('organizations');
+    }
+
+    function currentRestangular(){
+      return Restangular.one('organizations', userDetails.getCurrentOrganization().id);
+    }
+  }
+  organizationsService.$inject = ["Restangular", "userDetails"];
+
+})();
 
 (function() {
   'use strict';

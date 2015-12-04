@@ -15,8 +15,12 @@
     };
     return factory;
 
-    function getAll(){
-      return organizations.currentRestangular().all('people').getList();
+    function getAll(order){
+      var queryParams = {};
+      if(order != undefined){
+        queryParams.order = order;
+      }
+      return organizations.currentRestangular().all('people').getList(queryParams);
     }
 
     function get(id){
