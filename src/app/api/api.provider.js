@@ -26,7 +26,7 @@
     return providerFactory;
 
     /** @ngInject */
-    function apiService(Restangular, jsonapi, people, organizations) {
+    function apiService(Restangular, jsonapi, people, organizations, filters) {
       var factory = {
         baseUrl: providerFactory.baseUrl, //TODO: remove if not needed
 
@@ -46,6 +46,18 @@
         organizations: {
           all: organizations.all,
           current: organizations.current
+        },
+        filters: {
+          possibilities: {
+            assignedTo: filters.assignedTo,
+            interactions: filters.interactions,
+            groups: filters.groups,
+            status: filters.status,
+            permissions: filters.permissions,
+            gender: filters.gender,
+            faculty: filters.faculty,
+            surveys: filters.surveys
+          }
         }
       };
 

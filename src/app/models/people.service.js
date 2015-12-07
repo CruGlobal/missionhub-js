@@ -17,7 +17,7 @@
 
     function getAll(order){
       var queryParams = {};
-      if(order != undefined){
+      if(order !== undefined){
         queryParams.order = order;
       }
       return organizations.currentRestangular().all('people').getList(queryParams);
