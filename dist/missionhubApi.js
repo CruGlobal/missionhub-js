@@ -294,7 +294,9 @@
       permissions: permissions,
       gender: gender,
       faculty: faculty,
-      surveys: surveys
+      surveys: surveys,
+      questions: questions,
+      answers: answers
     };
     return factory;
 
@@ -411,7 +413,36 @@
       return $q(function(resolve) {
         resolve([
           {
-            name: 'To retrieve from server'
+            name: 'Survey 1'
+          },
+          {
+            name: 'Survey 2'
+          }
+        ]);
+      });
+    }
+
+    function questions(survey){
+      return $q(function(resolve) {
+        resolve([
+          {
+            name: 'Question 1 - ' + survey
+          },
+          {
+            name: 'Question 1 - ' + survey
+          }
+        ]);
+      });
+    }
+
+    function answers(survey, question){
+      return $q(function(resolve) {
+        resolve([
+          {
+            name: 'Answer 1 - ' + survey + ' - ' + question
+          },
+          {
+            name: 'Answer 1 - ' + survey + ' - ' + question
           }
         ]);
       });
@@ -826,7 +857,9 @@
             permissions: filters.permissions,
             gender: filters.gender,
             faculty: filters.faculty,
-            surveys: filters.surveys
+            surveys: filters.surveys,
+            questions: filters.questions,
+            answers: filters.answers
           }
         }
       };

@@ -56,7 +56,9 @@
             permissions: filters.permissions,
             gender: filters.gender,
             faculty: filters.faculty,
-            surveys: filters.surveys
+            surveys: filters.surveys,
+            questions: filters.questions,
+            answers: filters.answers
           }
         }
       };
