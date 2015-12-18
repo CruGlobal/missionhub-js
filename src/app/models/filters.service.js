@@ -8,7 +8,8 @@
   function filtersService(Restangular, $q, _, people) {
 
     var factory = {
-      assignedTo: assignedTo,
+      assignedTo: loadPeople,
+      initiators: loadPeople,
       interactions: interactions,
       groups: groups,
       status: status,
@@ -21,7 +22,7 @@
     };
     return factory;
 
-    function assignedTo(){
+    function loadPeople(){
       //TODO: retrieve all, not just first page
       return people.all().then(function(people){
         return _.map(people, function(person){

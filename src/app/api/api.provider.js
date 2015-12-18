@@ -50,6 +50,7 @@
         filters: {
           possibilities: {
             assignedTo: filters.assignedTo,
+            initiators: filters.initiators,
             interactions: filters.interactions,
             groups: filters.groups,
             status: filters.status,
