@@ -12,7 +12,7 @@
 
       var person = {
         "id": "2829607",
-        "type": "v4_people",
+        "type": "person",
         "attributes": {
           "first_name": "Fname",
           "last_name": "Lname",
@@ -35,14 +35,14 @@
           "email_addresses": {
             "data": [{
               "id": "487976",
-              "type": "v4_email_addresses"
+              "type": "email_address"
             }]
           }, "interactions": {"data": []}
         }
       };
       var included = [{
         "id": "487976",
-        "type": "v4_email_addresses",
+        "type": "email_address",
         "attributes": {
           "email": "myname@gmail.com",
           "person_id": 2829607,
@@ -70,32 +70,32 @@
         it('should return a compacted object with relationships inline', function(){
           expect(self.jsonapi.deserialize(self.singleInput)).toEqual({
             id: '2829607',
-            type: 'v4_people',
-            first_name: 'Fname',
-            last_name: 'Lname',
+            typeJsonapi: 'person',
+            firstName: 'Fname',
+            lastName: 'Lname',
             gender: 'Male',
             campus: null,
-            year_in_school: 'Senior',
+            yearInSchool: 'Senior',
             major: null,
             minor: null,
-            birth_date: '1990-01-01',
-            date_became_christian: null,
-            graduation_date: null,
+            birthDate: '1990-01-01',
+            dateBecameChristian: null,
+            graduationDate: null,
             picture: '',
-            user_id: 1234567,
-            fb_uid: 123456789,
-            created_at: '2015-10-20T15:03:39Z',
-            updated_at: '2015-10-26T23:56:05Z',
-            organizational_permission: 7,
-            email_addresses: [
+            userId: 1234567,
+            fbUid: 123456789,
+            createdAt: '2015-10-20T15:03:39Z',
+            updatedAt: '2015-10-26T23:56:05Z',
+            organizationalPermission: 7,
+            emailAddresses: [
               {
                 id: '487976',
-                type: 'v4_email_addresses',
+                typeJsonapi: 'emailAddress',
                 email: 'myname@gmail.com',
-                person_id: 2829607,
+                personId: 2829607,
                 primary: true,
-                created_at: '2015-10-20T15:00:05Z',
-                updated_at: '2015-10-20T15:03:41Z'
+                createdAt: '2015-10-20T15:00:05Z',
+                updatedAt: '2015-10-20T15:03:41Z'
               }
             ],
             interactions: []
@@ -108,32 +108,32 @@
           expect(self.jsonapi.deserialize(self.manyInputs)).toEqual([
             {
               id: '2829607',
-              type: 'v4_people',
-              first_name: 'Fname',
-              last_name: 'Lname',
+              typeJsonapi: 'person',
+              firstName: 'Fname',
+              lastName: 'Lname',
               gender: 'Male',
               campus: null,
-              year_in_school: 'Senior',
+              yearInSchool: 'Senior',
               major: null,
               minor: null,
-              birth_date: '1990-01-01',
-              date_became_christian: null,
-              graduation_date: null,
+              birthDate: '1990-01-01',
+              dateBecameChristian: null,
+              graduationDate: null,
               picture: '',
-              user_id: 1234567,
-              fb_uid: 123456789,
-              created_at: '2015-10-20T15:03:39Z',
-              updated_at: '2015-10-26T23:56:05Z',
-              organizational_permission: 7,
-              email_addresses: [
+              userId: 1234567,
+              fbUid: 123456789,
+              createdAt: '2015-10-20T15:03:39Z',
+              updatedAt: '2015-10-26T23:56:05Z',
+              organizationalPermission: 7,
+              emailAddresses: [
                 {
                   id: '487976',
-                  type: 'v4_email_addresses',
+                  typeJsonapi: 'emailAddress',
                   email: 'myname@gmail.com',
-                  person_id: 2829607,
+                  personId: 2829607,
                   primary: true,
-                  created_at: '2015-10-20T15:00:05Z',
-                  updated_at: '2015-10-20T15:03:41Z'
+                  createdAt: '2015-10-20T15:00:05Z',
+                  updatedAt: '2015-10-20T15:03:41Z'
                 }
               ],
               interactions: []
@@ -148,15 +148,15 @@
     describe('indexIncludes function', function(){
       it('should transform the includes into an object indexed by type and then id', function(){
         expect(self.jsonapi._indexIncludes(self.manyInputs.included)).toEqual({
-          v4_email_addresses: {
+          email_address: {
             487976: {
               "id": "487976",
-              "type": "v4_email_addresses",
+              "typeJsonapi": "emailAddress",
               "email": "myname@gmail.com",
-              "person_id": 2829607,
+              "personId": 2829607,
               "primary": true,
-              "created_at": "2015-10-20T15:00:05Z",
-              "updated_at": "2015-10-20T15:03:41Z"
+              "createdAt": "2015-10-20T15:00:05Z",
+              "updatedAt": "2015-10-20T15:03:41Z"
             }
           }
         });
@@ -167,23 +167,23 @@
       it('should return a compacted object with attributes inline', function(){
         expect(self.jsonapi._flattenData(self.manyInputs.data[0])).toEqual({
           "id": "2829607",
-          "type": "v4_people",
-          "first_name": "Fname",
-          "last_name": "Lname",
+          "typeJsonapi": "person",
+          "firstName": "Fname",
+          "lastName": "Lname",
           "gender": "Male",
           "campus": null,
-          "year_in_school": "Senior",
+          "yearInSchool": "Senior",
           "major": null,
           "minor": null,
-          "birth_date": "1990-01-01",
-          "date_became_christian": null,
-          "graduation_date": null,
+          "birthDate": "1990-01-01",
+          "dateBecameChristian": null,
+          "graduationDate": null,
           "picture": "",
-          "user_id": 1234567,
-          "fb_uid": 123456789,
-          "created_at": "2015-10-20T15:03:39Z",
-          "updated_at": "2015-10-26T23:56:05Z",
-          "organizational_permission": 7
+          "userId": 1234567,
+          "fbUid": 123456789,
+          "createdAt": "2015-10-20T15:03:39Z",
+          "updatedAt": "2015-10-26T23:56:05Z",
+          "organizationalPermission": 7
         });
       });
 
@@ -191,32 +191,32 @@
         var includesMap = self.jsonapi._indexIncludes(self.manyInputs.included);
         expect(self.jsonapi._flattenData(self.manyInputs.data[0], includesMap)).toEqual({
           "id": "2829607",
-          "type": "v4_people",
-          "first_name": "Fname",
-          "last_name": "Lname",
+          "typeJsonapi": "person",
+          "firstName": "Fname",
+          "lastName": "Lname",
           "gender": "Male",
           "campus": null,
-          "year_in_school": "Senior",
+          "yearInSchool": "Senior",
           "major": null,
           "minor": null,
-          "birth_date": "1990-01-01",
-          "date_became_christian": null,
-          "graduation_date": null,
+          "birthDate": "1990-01-01",
+          "dateBecameChristian": null,
+          "graduationDate": null,
           "picture": "",
-          "user_id": 1234567,
-          "fb_uid": 123456789,
-          "created_at": "2015-10-20T15:03:39Z",
-          "updated_at": "2015-10-26T23:56:05Z",
-          "organizational_permission": 7,
-          "email_addresses": [
+          "userId": 1234567,
+          "fbUid": 123456789,
+          "createdAt": "2015-10-20T15:03:39Z",
+          "updatedAt": "2015-10-26T23:56:05Z",
+          "organizationalPermission": 7,
+          "emailAddresses": [
             {
               "id": "487976",
-              "type": "v4_email_addresses",
+              "typeJsonapi": "emailAddress",
               "email": "myname@gmail.com",
-              "person_id": 2829607,
+              "personId": 2829607,
               "primary": true,
-              "created_at": "2015-10-20T15:00:05Z",
-              "updated_at": "2015-10-20T15:03:41Z"
+              "createdAt": "2015-10-20T15:00:05Z",
+              "updatedAt": "2015-10-20T15:03:41Z"
             }
           ],
           "interactions": []
@@ -231,15 +231,81 @@
           email_addresses: [
             {
               "id": "487976",
-              "type": "v4_email_addresses",
+              "typeJsonapi": "emailAddress",
               "email": "myname@gmail.com",
-              "person_id": 2829607,
+              "personId": 2829607,
               "primary": true,
-              "created_at": "2015-10-20T15:00:05Z",
-              "updated_at": "2015-10-20T15:03:41Z"
+              "createdAt": "2015-10-20T15:00:05Z",
+              "updatedAt": "2015-10-20T15:03:41Z"
             }
           ],
           interactions: []
+        });
+      });
+    });
+
+    describe('serialize function', function() {
+      it('should take a relationships object and return a compacted object with loaded includes', function () {
+        expect(self.jsonapi.serialize({
+          "id": "2829607",
+          "typeJsonapi": "person",
+          "firstName": "Fname",
+          "lastName": "Lname",
+          "gender": "Male",
+          "campus": null,
+          "yearInSchool": "Senior",
+          "major": null,
+          "minor": null,
+          "birthDate": "1990-01-01",
+          "dateBecameChristian": null,
+          "graduationDate": null,
+          "picture": "",
+          "userId": 1234567,
+          "fbUid": 123456789,
+          "createdAt": "2015-10-20T15:03:39Z",
+          "updatedAt": "2015-10-26T23:56:05Z",
+          "organizationalPermission": 7,
+          responseAttributes: [
+            "firstName",
+            "lastName",
+            "gender",
+            "campus",
+            "yearInSchool",
+            "major",
+            "minor",
+            "birthDate",
+            "dateBecameChristian",
+            "graduationDate",
+            "picture",
+            "userId",
+            "fbUid",
+            "createdAt",
+            "updatedAt",
+            "organizationalPermission"
+          ]
+        })).toEqual({
+          data: {
+            "id": "2829607",
+            "type": "person",
+            attributes: {
+              "first_name": "Fname",
+              "last_name": "Lname",
+              "gender": "Male",
+              "campus": null,
+              "year_in_school": "Senior",
+              "major": null,
+              "minor": null,
+              "birth_date": "1990-01-01",
+              "date_became_christian": null,
+              "graduation_date": null,
+              "picture": "",
+              "user_id": 1234567,
+              "fb_uid": 123456789,
+              "created_at": "2015-10-20T15:03:39Z",
+              "updated_at": "2015-10-26T23:56:05Z",
+              "organizational_permission": 7
+            }
+          }
         });
       });
     });

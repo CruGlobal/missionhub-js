@@ -3,7 +3,8 @@
 
   angular
     .module('missionhub.api.utils', [
-      'LocalStorageModule'
+      'LocalStorageModule',
+      'change-case'
     ]);
 
 })();

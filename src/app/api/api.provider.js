@@ -70,6 +70,13 @@
         Restangular.addResponseInterceptor(function(data, operation, what, url) {
           return jsonapi.deserialize(data, url);
         });
+        Restangular.addRequestInterceptor(function(data, operation) {
+          if(operation === 'PATCH'){
+            return jsonapi.serialize(data);
+          }else{
+            return data;
+          }
+        });
       }
 
       return factory;
