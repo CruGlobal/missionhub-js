@@ -5,27 +5,29 @@
     .module('missionhub.api')
     .factory('people', peopleService);
 
-  function peopleService(organizations, userDetails) {
+  function peopleService(organizations, userDetails, datastore) {
     var factory = {
       all: getAll,
       get: get,
-      getWithEmails: getWithEmails,
+      save: save
+      /*getWithEmails: getWithEmails,
       getWithInteractions: getWithInteractions,
-      current: getCurrent
+      current: getCurrent*/
     };
     return factory;
 
-    function getAll(order, limit, offset){
-      var queryParams = {
-        order: order,
-        limit: limit,
-        offset: offset
-      };
-      return organizations.currentRestangular().all('people').getList(queryParams);
+    function getAll(query, order){
+      return datastore.search('people', query, order);
+      //return organizations.currentRestangular().all('people').getList(queryParams);
     }
 
     function get(id){
-      return organizations.currentRestangular().one('people', id).get();
+      //console.log('disabledApi');
+      return datastore.get('people', id)//.first();
+    }
+
+    function save(obj){
+      return datastore.save('people', obj);
     }
 
     function getCurrent(){

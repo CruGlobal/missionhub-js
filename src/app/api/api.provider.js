@@ -33,7 +33,8 @@
         people: {
           all: people.all,
           current: people.current,
-          get: people.get/*,
+          get: people.get,
+          save: people.save/*,
           getMe: peopleEndpoint.getMe,
           getPersonWithEverything: peopleEndpoint.getPersonWithEverything,
           getPersonWithInfo: peopleEndpoint.getPersonWithInfo,
