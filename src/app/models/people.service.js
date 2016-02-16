@@ -23,7 +23,7 @@
 
     function get(id){
       //console.log('disabledApi');
-      return datastore.get('people', id)//.first();
+      return datastore.get('people', id);
     }
 
     function save(obj){

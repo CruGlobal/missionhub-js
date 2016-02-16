@@ -264,25 +264,7 @@
           "fbUid": 123456789,
           "createdAt": "2015-10-20T15:03:39Z",
           "updatedAt": "2015-10-26T23:56:05Z",
-          "organizationalPermission": 7,
-          responseAttributes: [
-            "firstName",
-            "lastName",
-            "gender",
-            "campus",
-            "yearInSchool",
-            "major",
-            "minor",
-            "birthDate",
-            "dateBecameChristian",
-            "graduationDate",
-            "picture",
-            "userId",
-            "fbUid",
-            "createdAt",
-            "updatedAt",
-            "organizationalPermission"
-          ]
+          "organizationalPermission": 7
         })).toEqual({
           data: {
             "id": "2829607",

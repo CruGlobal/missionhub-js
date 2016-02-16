@@ -44,7 +44,7 @@
         type: data.typeJsonapi
       };
       serializedData.attributes = _(data)
-        .pick(data.responseAttributes)
+        .omit('id', 'typeJsonapi')
         .mapKeys(function(value, key){
           return camelToSnakeCase(key);
         })
@@ -82,10 +82,6 @@
       });
       // Move attributes to root level
       flattenedObj = _.merge(flattenedObj, attributes);
-      // Save list of keys that will be injected into root
-      Object.defineProperty(flattenedObj, 'responseAttributes', {
-        value: _.keys(attributes)
-      });
       if (_.isObject(includesMap) && !_.isEmpty(includesMap)) {
         // Convert relationship keys to camel case
         var relationshipKeys = _.mapKeys(obj.relationships, function(value, key){
@@ -93,10 +89,6 @@
         });
         // Compute relationships
         var relationships = findRelationships(relationshipKeys, includesMap);
-        // Save list of keys that will be injected into root
-        Object.defineProperty(flattenedObj, 'responseRelationships', {
-          value: _.keys(relationships)
-        });
         // Load relationships into root level
         flattenedObj = _.merge(flattenedObj, relationships);
       }

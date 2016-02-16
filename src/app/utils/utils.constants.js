@@ -4,6 +4,7 @@
 
   angular
     .module('missionhub.api.utils')
-    .constant('_', window._);
+    .constant('_', window._)
+    .constant('deepDiff', window.DeepDiff);
 
 })();

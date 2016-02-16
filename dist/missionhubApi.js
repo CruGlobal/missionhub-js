@@ -15,7 +15,8 @@
 
   angular
     .module('missionhub.api.utils')
-    .constant('_', window._);
+    .constant('_', window._)
+    .constant('deepDiff', window.DeepDiff);
 
 })();
 
@@ -99,12 +100,11 @@
     .factory('lokiDB', lokiDBService);
 
   /** @ngInject */
-  function lokiDBService(Loki, rx) {
+  function lokiDBService(_, Loki, rx) {
     var factory = {
       get: get,
       search: search,
-      save: save,
-      apiImportItem: apiImportItem
+      save: save
     };
 
     var db;
@@ -135,13 +135,14 @@
       }if(dbLoadingObservable) {
         return dbLoadingObservable;
       }else{
-        return dbLoadingObservable = rx.Observable.create(function(observer){
+        dbLoadingObservable = rx.Observable.create(function(observer){
           db.loadDatabase({}, function (){
             dbLoaded = true;
             observer.onNext(db);
             observer.onCompleted();
           });
         });
+        return dbLoadingObservable;
       }
     }
 
@@ -154,7 +155,7 @@
           .map(function () {
             var collection = db.getCollection(name);
             if (collection === null) {
-              collection = db.addCollection(name, {disableChangesApi: false});
+              collection = db.addCollection(name);
               collection.ensureUniqueIndex('id');
             }
             collections[name] = collection;
@@ -190,32 +191,23 @@
       return insertOrUpdate(type, object);
     }
 
-    function apiImportItem(type, object){
-      return insertOrUpdate(type, object, {disableChanges: true});
-    }
-
     // Insert or update object depending in if it already exists. Return object wrapped in observable
-    function insertOrUpdate(type, object, options){
-      options = _.defaults(options || {}, {disableChanges: false});
+    function insertOrUpdate(type, object){
       return collection(type)
         .map(function(collection){
           var existing = collection.by('id', object.id);
           var updatedObj;
-          if(options.disableChanges){
-            collection.setChangesApi( false );
-          }
           if(existing){
             existing = _.merge(existing, object);
             updatedObj = collection.update(existing);
           }else{
             updatedObj = collection.insert(object);
           }
-          collection.setChangesApi( true );
           return updatedObj;
         });
     }
   }
-  lokiDBService.$inject = ["Loki", "rx"];
+  lokiDBService.$inject = ["_", "Loki", "rx"];
 
 })();
 
@@ -265,7 +257,7 @@
         type: data.typeJsonapi
       };
       serializedData.attributes = _(data)
-        .pick(data.responseAttributes)
+        .omit('id', 'typeJsonapi')
         .mapKeys(function(value, key){
           return camelToSnakeCase(key);
         })
@@ -303,10 +295,6 @@
       });
       // Move attributes to root level
       flattenedObj = _.merge(flattenedObj, attributes);
-      // Save list of keys that will be injected into root
-      Object.defineProperty(flattenedObj, 'responseAttributes', {
-        value: _.keys(attributes)
-      });
       if (_.isObject(includesMap) && !_.isEmpty(includesMap)) {
         // Convert relationship keys to camel case
         var relationshipKeys = _.mapKeys(obj.relationships, function(value, key){
@@ -314,10 +302,6 @@
         });
         // Compute relationships
         var relationships = findRelationships(relationshipKeys, includesMap);
-        // Save list of keys that will be injected into root
-        Object.defineProperty(flattenedObj, 'responseRelationships', {
-          value: _.keys(relationships)
-        });
         // Load relationships into root level
         flattenedObj = _.merge(flattenedObj, relationships);
       }
@@ -362,7 +346,7 @@
     .module('missionhub.api.utils')
     .factory('datastore', datastoreService);
 
-  function datastoreService(_, lokiDB, rx, organizations) {
+  function datastoreService($log, _, lokiDB, rx, organizations, observeOnScope, deepDiff) {
     var factory = {
       get: get,
       search: search,
@@ -370,28 +354,95 @@
     };
 
     rx.Observable.prototype.bind = function($scope, path, type){
-      var currentObserver;
-      return this.safeApply($scope,
-        function(data){
-          if(currentObserver){
-            currentObserver.dispose();
+      var currentObjectState;
+      var skipNextChangeDetection = false;
+
+      //Initialize with empty object so there is never a change where the lhs is nonexistent
+      _.set($scope, path, {});
+
+      var changesStream = observeOnScope($scope, path, true)
+        // Filter out this change if the scope was just updated by an API response
+        .filter(function(){
+          if(skipNextChangeDetection){
+            skipNextChangeDetection = false;
+            return false;
+          }else{
+            return true;
           }
+        })
+        .map(function(watch){
+          //Save whole object to be referenced later
+          currentObjectState = watch.newValue;
+
+          //Return the diff between the $watch's oldValue and newValue
+          return deepDiff.diff(watch.oldValue, watch.newValue, function preFilter(path, key){
+            //ignore properties prefixed with $ and fields added by 3rd party libraries
+            return key[0] === '$' ||
+              _.includes(
+                //TODO: remove interactions and messages
+                ['getRestangularUrl', 'getRequestedUrl', 'addRestangularMethod', 'clone', 'withHttpConfig', 'plain', 'one', 'all', 'several', 'oneUrl', 'allUrl', 'get', 'getList', 'put', 'post', 'remove', 'head', 'trace', 'options', 'patch', 'save', 'customOperation', 'doPUT', 'customPUT', 'doPOST', 'customPOST', 'doGET', 'customGET', 'doDELETE', 'customDELETE', 'customGETLIST', 'doGETLIST', 'meta', 'interactions', 'messages'],
+                key
+              );
+          });
+        })
+        //Filter out cases where diffs is undefined
+        .filter(function(diffs){
+          return diffs !== undefined;
+        })
+        //Transform array of diffs into many emissions
+        .flatMap(function(diffs){
+          return rx.Observable.from(diffs);
+        });
+      var changesetStream = changesStream
+        //Wait until stream has been quiet for 500ms and then emit everything since the last window emitted
+        .window(changesStream.debounce(500))
+        //Reduce window of diffs into a single changeset object
+        .flatMap(function (changesGroup) {
+          return changesGroup
+            .reduce(function(acc, change){
+              var isRelated = change.path.length > 1 && _.has(_.get(currentObjectState, _.dropRight(change.path)), 'typeJsonapi');
+              switch(change.kind){
+                case 'N': //New
+                case 'E': //Edit
+                  if(!isRelated) {
+                    _.set(acc, change.path, change.rhs);
+                  }else{
+                    console.log('construct changed obj to send to', change.path[0] + '/' + _.get(currentObjectState, _.dropRight(change.path)).id);
+                  }
+                  break;
+                case 'D': //Delete
+                  if(!isRelated) {
+                    //TODO: see if setting attribute to null is a good persistence strategy for the API
+                    _.set(acc, change.path, null);
+                  }else{
+                    console.log('send DELETE to', change.path[0] + '/' + change.rhs.id);
+                  }
+                  break;
+                default: //TODO: need to add type 'A' (Array Change)
+                  $log.error('Change type not handled', change);
+                  break;
+              }
+              return acc;
+            }, {})
+            .filter(function(changeset){
+              return !_.isEmpty(changeset);
+            })
+            .flatMap(function(changeset){
+              //Add id and type to changeset object
+              _.merge(changeset, {id: currentObjectState.id, typeJsonapi: currentObjectState.typeJsonapi});
+              //Send this changeset to API using PATCH
+              return save(type, changeset);
+            });
+        });
+
+      //Merge in results from saving changesets and apply updates from API to scope
+      return this.merge(changesetStream)
+        .safeApply($scope, function(data) {
+          console.log('%cApplying data to scope', 'color: purple', data);
+          //Skip change detection when loading updates from API
+          skipNextChangeDetection = true;
+          //apply external data updates to scope
           _.set($scope, path, data);
-          if(data) {
-            currentObserver = rx.Observable.ofObjectChanges(_.get($scope, path))
-              .filter(function (data) {
-                return !_.includes(
-                  ['getRestangularUrl', 'getRequestedUrl', 'addRestangularMethod', 'clone', 'withHttpConfig', 'plain', 'one', 'all', 'several', 'oneUrl', 'allUrl', 'get', 'getList', 'put', 'post', 'remove', 'head', 'trace', 'options', 'patch', 'save', 'customOperation', 'doPUT', 'customPUT', 'doPOST', 'customPOST', 'doGET', 'customGET', 'doDELETE', 'customDELETE', 'customGETLIST', 'doGETLIST'],
-                  data.name
-                );
-              })
-              .subscribe(function (change) {
-                save(type, change.object)
-                  .subscribe(function () {
-                    console.log('saved', change)
-                  });
-              });
-          }
         });
     };
 
@@ -402,11 +453,9 @@
       var apiResult = rx.Observable
         .fromPromise(organizations.currentRestangular().one(type, id).get())
         .flatMap(function(data){
-          return lokiDB.apiImportItem(type, data);
+          return lokiDB.save(type, data);
         });
-      var delay = 0;
-      console.log('delaying api by', delay, 'seconds');
-      return lokiDB.get(type, id).concat(apiResult.delay(delay));
+      return lokiDB.get(type, id).concat(apiResult);
     }
 
     // Emit values retrieved from cache and then request, save, and emit value from API
@@ -418,7 +467,7 @@
         })
         // cache each item
         .flatMap(function(data){
-          return lokiDB.apiImportItem(type, data);
+          return lokiDB.save(type, data);
         })
         .toArray();
 
@@ -429,287 +478,19 @@
     }
 
     function save(type, object){
+      return rx.Observable
+        .fromPromise(organizations.currentRestangular().one(type, object.id).patch(object))
+        .flatMap(function(data){
+          console.log('%cresponse from save', 'color: green; font-weight: bold', data);
+          return cache(type, data);
+        });
+    }
+
+    function cache(type, object){
       return lokiDB.save(type, object);
     }
   }
-  datastoreService.$inject = ["_", "lokiDB", "rx", "organizations"];
-
-})();
-
-(function() {
-  'use strict';
-
-  angular
-    .module('missionhub.api', [
-      'restangular',
-      'lokijs',
-      'rx',
-
-      'missionhub.api.cache',
-      'missionhub.api.filters',
-      'missionhub.api.utils'
-    ]);
-
-})();
-
-(function() {
-  'use strict';
-
-  angular
-    .module('missionhub.api')
-    .factory('people', peopleService);
-
-  function peopleService(organizations, userDetails, datastore) {
-    var factory = {
-      all: getAll,
-      get: get,
-      save: save
-      /*getWithEmails: getWithEmails,
-      getWithInteractions: getWithInteractions,
-      current: getCurrent*/
-    };
-    return factory;
-
-    function getAll(query, order){
-      return datastore.search('people', query, order);
-      //return organizations.currentRestangular().all('people').getList(queryParams);
-    }
-
-    function get(id){
-      //console.log('disabledApi');
-      return datastore.get('people', id)//.first();
-    }
-
-    function save(obj){
-      return datastore.save('people', obj);
-    }
-
-    function getCurrent(){
-      return organizations.currentRestangular().one('people', userDetails.getPersonId()).get();
-    }
-
-    function getWithEmails(id){
-      return organizations.currentRestangular().one('people', id).get({include: 'email_addresses'});
-    }
-
-    function getWithInteractions(id){
-      return organizations.currentRestangular().one('people', id).get({include: 'interactions'});
-    }
-  }
-  peopleService.$inject = ["organizations", "userDetails", "datastore"];
-
-})();
-
-(function() {
-  'use strict';
-
-  angular
-    .module('missionhub.api')
-    .factory('organizations', organizationsService);
-
-  function organizationsService(Restangular, userDetails) {
-
-    var factory = {
-      all: getAll,
-      current: getCurrent,
-      allRestangular: allRestangular,
-      currentRestangular: currentRestangular
-    };
-    return factory;
-
-    function getAll(){
-      return factory.allRestangular().getList();
-    }
-
-    function getCurrent(){
-      return factory.currentRestangular().get();
-    }
-
-    function allRestangular(){
-      return Restangular.all('organizations');
-    }
-
-    function currentRestangular(){
-      return Restangular.one('organizations', userDetails.getCurrentOrganization().id);
-    }
-  }
-  organizationsService.$inject = ["Restangular", "userDetails"];
-
-})();
-
-(function() {
-  'use strict';
-
-  angular
-    .module('missionhub.api')
-    .factory('filters', filtersService);
-
-  function filtersService(Restangular, $q, _, people) {
-
-    var factory = {
-      assignedTo: loadPeople,
-      initiators: loadPeople,
-      interactions: interactions,
-      groups: groups,
-      status: status,
-      permissions: permissions,
-      gender: gender,
-      faculty: faculty,
-      surveys: surveys,
-      questions: questions,
-      answers: answers
-    };
-    return factory;
-
-    function loadPeople(){
-      //TODO: retrieve all, not just first page
-      return people.all().then(function(people){
-        return _.map(people, function(person){
-          return { name: person.full_name };
-        });
-      });
-    }
-
-    function interactions(){
-      return $q(function(resolve) {
-        resolve([
-          {
-            name: 'To retrieve from server'
-          }
-        ]);
-      });
-    }
-
-    function groups(){
-      return $q(function(resolve) {
-        resolve([
-          {
-            name: 'To retrieve from server'
-          }
-        ]);
-      });
-    }
-
-    function status(){
-      return $q(function(resolve) {
-        resolve([
-          {
-            id: 'uncontacted',
-            name: 'Uncontacted'
-          },
-          {
-            id: 'attempted_contact',
-            name: 'Attempted Contact'
-          },
-          {
-            id: 'contacted',
-            name: 'Contacted'
-          },
-          {
-            id: 'completed',
-            name: 'Completed'
-          },
-          {
-            id: 'do_not_contact',
-            name: 'Do Not Contact'
-          }
-        ]);
-      });
-    }
-
-    function permissions(){
-      return $q(function(resolve) {
-        resolve([
-          {
-            id: 'admin',
-            name: 'Admin'
-          },
-          {
-            id: 'user',
-            name: 'User'
-          },
-          {
-            id: 'guest',
-            name: 'Guest'
-          },
-          {
-            id: 'none',
-            name: 'None'
-          }
-        ]);
-      });
-    }
-
-    function gender(){
-      return $q(function(resolve) {
-        resolve([
-          {
-            id: 'male',
-            name: 'Male'
-          },
-          {
-            id: 'female',
-            name: 'Female'
-          }
-        ]);
-      });
-    }
-
-    function faculty(){
-      return $q(function(resolve) {
-        resolve([
-          {
-            id: 'yes',
-            name: 'Yes'
-          },
-          {
-            id: 'no',
-            name: 'No'
-          }
-        ]);
-      });
-    }
-
-    function surveys(){
-      return $q(function(resolve) {
-        resolve([
-          {
-            name: 'Survey 1'
-          },
-          {
-            name: 'Survey 2'
-          }
-        ]);
-      });
-    }
-
-    function questions(survey){
-      return $q(function(resolve) {
-        resolve([
-          {
-            name: 'Question 1 - ' + survey
-          },
-          {
-            name: 'Question 1 - ' + survey
-          }
-        ]);
-      });
-    }
-
-    function answers(survey, question){
-      return $q(function(resolve) {
-        resolve([
-          {
-            name: 'Answer 1 - ' + survey + ' - ' + question
-          },
-          {
-            name: 'Answer 1 - ' + survey + ' - ' + question
-          }
-        ]);
-      });
-    }
-  }
-  filtersService.$inject = ["Restangular", "$q", "_", "people"];
+  datastoreService.$inject = ["$log", "_", "lokiDB", "rx", "organizations", "observeOnScope", "deepDiff"];
 
 })();
 
@@ -960,6 +741,283 @@
   'use strict';
 
   angular
+    .module('missionhub.api', [
+      'restangular',
+      'lokijs',
+      'rx',
+
+      'missionhub.api.cache',
+      'missionhub.api.filters',
+      'missionhub.api.utils'
+    ]);
+
+})();
+
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api')
+    .factory('people', peopleService);
+
+  function peopleService(organizations, userDetails, datastore) {
+    var factory = {
+      all: getAll,
+      get: get,
+      save: save
+      /*getWithEmails: getWithEmails,
+      getWithInteractions: getWithInteractions,
+      current: getCurrent*/
+    };
+    return factory;
+
+    function getAll(query, order){
+      return datastore.search('people', query, order);
+      //return organizations.currentRestangular().all('people').getList(queryParams);
+    }
+
+    function get(id){
+      //console.log('disabledApi');
+      return datastore.get('people', id);
+    }
+
+    function save(obj){
+      return datastore.save('people', obj);
+    }
+
+    function getCurrent(){
+      return organizations.currentRestangular().one('people', userDetails.getPersonId()).get();
+    }
+
+    function getWithEmails(id){
+      return organizations.currentRestangular().one('people', id).get({include: 'email_addresses'});
+    }
+
+    function getWithInteractions(id){
+      return organizations.currentRestangular().one('people', id).get({include: 'interactions'});
+    }
+  }
+  peopleService.$inject = ["organizations", "userDetails", "datastore"];
+
+})();
+
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api')
+    .factory('organizations', organizationsService);
+
+  function organizationsService(Restangular, userDetails) {
+
+    var factory = {
+      all: getAll,
+      current: getCurrent,
+      allRestangular: allRestangular,
+      currentRestangular: currentRestangular
+    };
+    return factory;
+
+    function getAll(){
+      return factory.allRestangular().getList();
+    }
+
+    function getCurrent(){
+      return factory.currentRestangular().get();
+    }
+
+    function allRestangular(){
+      return Restangular.all('organizations');
+    }
+
+    function currentRestangular(){
+      return Restangular.one('organizations', userDetails.getCurrentOrganization().id);
+    }
+  }
+  organizationsService.$inject = ["Restangular", "userDetails"];
+
+})();
+
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api')
+    .factory('filters', filtersService);
+
+  function filtersService(Restangular, $q, _, people) {
+
+    var factory = {
+      assignedTo: loadPeople,
+      initiators: loadPeople,
+      interactions: interactions,
+      groups: groups,
+      status: status,
+      permissions: permissions,
+      gender: gender,
+      faculty: faculty,
+      surveys: surveys,
+      questions: questions,
+      answers: answers
+    };
+    return factory;
+
+    function loadPeople(){
+      //TODO: retrieve all, not just first page
+      return people.all().then(function(people){
+        return _.map(people, function(person){
+          return { name: person.full_name };
+        });
+      });
+    }
+
+    function interactions(){
+      return $q(function(resolve) {
+        resolve([
+          {
+            name: 'To retrieve from server'
+          }
+        ]);
+      });
+    }
+
+    function groups(){
+      return $q(function(resolve) {
+        resolve([
+          {
+            name: 'To retrieve from server'
+          }
+        ]);
+      });
+    }
+
+    function status(){
+      return $q(function(resolve) {
+        resolve([
+          {
+            id: 'uncontacted',
+            name: 'Uncontacted'
+          },
+          {
+            id: 'attempted_contact',
+            name: 'Attempted Contact'
+          },
+          {
+            id: 'contacted',
+            name: 'Contacted'
+          },
+          {
+            id: 'completed',
+            name: 'Completed'
+          },
+          {
+            id: 'do_not_contact',
+            name: 'Do Not Contact'
+          }
+        ]);
+      });
+    }
+
+    function permissions(){
+      return $q(function(resolve) {
+        resolve([
+          {
+            id: 'admin',
+            name: 'Admin'
+          },
+          {
+            id: 'user',
+            name: 'User'
+          },
+          {
+            id: 'guest',
+            name: 'Guest'
+          },
+          {
+            id: 'none',
+            name: 'None'
+          }
+        ]);
+      });
+    }
+
+    function gender(){
+      return $q(function(resolve) {
+        resolve([
+          {
+            id: 'male',
+            name: 'Male'
+          },
+          {
+            id: 'female',
+            name: 'Female'
+          }
+        ]);
+      });
+    }
+
+    function faculty(){
+      return $q(function(resolve) {
+        resolve([
+          {
+            id: 'yes',
+            name: 'Yes'
+          },
+          {
+            id: 'no',
+            name: 'No'
+          }
+        ]);
+      });
+    }
+
+    function surveys(){
+      return $q(function(resolve) {
+        resolve([
+          {
+            name: 'Survey 1'
+          },
+          {
+            name: 'Survey 2'
+          }
+        ]);
+      });
+    }
+
+    function questions(survey){
+      return $q(function(resolve) {
+        resolve([
+          {
+            name: 'Question 1 - ' + survey
+          },
+          {
+            name: 'Question 1 - ' + survey
+          }
+        ]);
+      });
+    }
+
+    function answers(survey, question){
+      return $q(function(resolve) {
+        resolve([
+          {
+            name: 'Answer 1 - ' + survey + ' - ' + question
+          },
+          {
+            name: 'Answer 1 - ' + survey + ' - ' + question
+          }
+        ]);
+      });
+    }
+  }
+  filtersService.$inject = ["Restangular", "$q", "_", "people"];
+
+})();
+
+(function() {
+  'use strict';
+
+  angular
     .module('missionhub.api.cache', []);
 
 })();
@@ -1134,7 +1192,7 @@
           return jsonapi.deserialize(data, url);
         });
         Restangular.addRequestInterceptor(function(data, operation) {
-          if(operation === 'PATCH'){
+          if(operation === 'patch'){
             return jsonapi.serialize(data);
           }else{
             return data;

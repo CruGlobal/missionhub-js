@@ -6,12 +6,11 @@
     .factory('lokiDB', lokiDBService);
 
   /** @ngInject */
-  function lokiDBService(Loki, rx) {
+  function lokiDBService(_, Loki, rx) {
     var factory = {
       get: get,
       search: search,
-      save: save,
-      apiImportItem: apiImportItem
+      save: save
     };
 
     var db;
@@ -42,13 +41,14 @@
       }if(dbLoadingObservable) {
         return dbLoadingObservable;
       }else{
-        return dbLoadingObservable = rx.Observable.create(function(observer){
+        dbLoadingObservable = rx.Observable.create(function(observer){
           db.loadDatabase({}, function (){
             dbLoaded = true;
             observer.onNext(db);
             observer.onCompleted();
           });
         });
+        return dbLoadingObservable;
       }
     }
 
@@ -61,7 +61,7 @@
           .map(function () {
             var collection = db.getCollection(name);
             if (collection === null) {
-              collection = db.addCollection(name, {disableChangesApi: false});
+              collection = db.addCollection(name);
               collection.ensureUniqueIndex('id');
             }
             collections[name] = collection;
@@ -97,27 +97,18 @@
       return insertOrUpdate(type, object);
     }
 
-    function apiImportItem(type, object){
-      return insertOrUpdate(type, object, {disableChanges: true});
-    }
-
     // Insert or update object depending in if it already exists. Return object wrapped in observable
-    function insertOrUpdate(type, object, options){
-      options = _.defaults(options || {}, {disableChanges: false});
+    function insertOrUpdate(type, object){
       return collection(type)
         .map(function(collection){
           var existing = collection.by('id', object.id);
           var updatedObj;
-          if(options.disableChanges){
-            collection.setChangesApi( false );
-          }
           if(existing){
             existing = _.merge(existing, object);
             updatedObj = collection.update(existing);
           }else{
             updatedObj = collection.insert(object);
           }
-          collection.setChangesApi( true );
           return updatedObj;
         });
     }
