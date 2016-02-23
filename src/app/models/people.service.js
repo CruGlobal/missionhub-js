@@ -17,17 +17,17 @@
     return factory;
 
     function getAll(query, order){
-      return datastore.search('people', query, order);
+      return datastore.parent(organizations.getCurrentPath()).search('people', query, order);
       //return organizations.currentRestangular().all('people').getList(queryParams);
     }
 
     function get(id){
       //console.log('disabledApi');
-      return datastore.get('people', id);
+      return datastore.parent(organizations.getCurrentPath()).get('people', id);
     }
 
     function save(obj){
-      return datastore.save('people', obj);
+      return datastore.parent(organizations.getCurrentPath()).save('people', obj);
     }
 
     function getCurrent(){

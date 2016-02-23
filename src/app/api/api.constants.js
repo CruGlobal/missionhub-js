@@ -4,7 +4,6 @@
 
   angular
     .module('missionhub.api')
-    .constant('_', window._)
-    .constant('apiConfig', {baseUrl: '/'});
+    .constant('_', window._);
 
 })();

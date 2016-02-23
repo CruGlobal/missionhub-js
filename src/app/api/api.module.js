@@ -4,9 +4,8 @@
   angular
     .module('missionhub.api', [
       'restangular',
-      'lokijs',
-      'rx',
 
+      'missionhub.api.config',
       'missionhub.api.cache',
       'missionhub.api.filters',
       'missionhub.api.utils'

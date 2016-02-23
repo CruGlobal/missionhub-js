@@ -6,7 +6,7 @@
     .factory('lokiDB', lokiDBService);
 
   /** @ngInject */
-  function lokiDBService(_, Loki, rx) {
+  function lokiDBService(_, Loki, LokiIndexedAdapter, rx) {
     var factory = {
       get: get,
       search: search,

@@ -11,9 +11,15 @@
       all: getAll,
       current: getCurrent,
       allRestangular: allRestangular,
-      currentRestangular: currentRestangular
+      currentRestangular: currentRestangular,
+      getCurrentPath: getCurrentPath
     };
+
     return factory;
+
+    function getCurrentPath(){
+      return ['organizations', userDetails.getCurrentOrganization().id];
+    }
 
     function getAll(){
       return factory.allRestangular().getList();
@@ -28,7 +34,7 @@
     }
 
     function currentRestangular(){
-      return Restangular.one('organizations', userDetails.getCurrentOrganization().id);
+      return Restangular.one(getCurrentPath());
     }
   }
 

@@ -6,7 +6,7 @@
     .provider('api', apiProvider);
 
   /** @ngInject */
-  function apiProvider(apiConfig, RestangularProvider) {
+  function apiProvider(apiConfig, RestangularProvider, pathUtilsProvider) {
     var providerFactory = {
       $get: apiService
     };
@@ -17,7 +17,7 @@
           return apiConfig.baseUrl;
         },
         set: function (value) {
-          apiConfig.baseUrl = value;
+          apiConfig.baseUrl = pathUtilsProvider.parse(value);
           RestangularProvider.setBaseUrl(value);
         }
       }

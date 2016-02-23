@@ -4,7 +4,12 @@
   angular
     .module('missionhub.api.utils', [
       'LocalStorageModule',
-      'change-case'
+      'change-case',
+      'lokijs',
+      'rx',
+      'restangular',
+
+      'missionhub.api.config'
     ]);
 
 })();

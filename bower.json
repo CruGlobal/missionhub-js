@@ -33,5 +33,14 @@
   },
   "resolutions": {
     "angular": "~1.5.0"
+  },
+  "overrides": {
+    "lokijs": {
+      "main": [
+        "src/lokijs.js",
+        "src/loki-angular.js",
+        "src/loki-indexed-adapter.js"
+      ]
+    }
   }
 }
