@@ -14,53 +14,89 @@
       search: search,
       save: save,
       saveAll: saveAll,
+      bind: bind,
       parent: parent,
       getParentPath: getParentPath,
-      bind: bind,
       currentRestangular: currentRestangular,
       _findParentResourceOfChange: findParentResourceOfChange
     };
 
     return factory;
 
+    // Emit value retrieved from cache and then request, cache, and emit value from API
+    function get(type, id){
+      return _.create(this, {observable: lokiDB.get(type, id).concat(this.getFromApiOnly(type, id).observable)});
+    }
+
+    function getFromApiOnly(type, id){
+      return _.create(this, {
+        observable: rx.Observable
+          .fromPromise(this.currentRestangular().one(type, id).get())
+          .flatMap(function (data) {
+            return cache(data);
+          })
+      });
+    }
+
+    // Emit values retrieved from cache and then request, save, and emit value from API
+    function search(type, query, order){
+      var apiResult = rx.Observable
+        .fromPromise(this.currentRestangular().all(type).getList())
+        // cache each item
+        .tap(function(data){
+          console.log('tap', data);
+        })
+        .flatMap(function(data){
+          console.log('flatMap', data);
+          return cache(data);
+        })
+        .toArray();
+
+      return _.create(this, {
+        observable: lokiDB.search(type, query, order)
+          .concat(apiResult.flatMap(function() {
+            return lokiDB.search(type, query, order);
+          }))
+      });
+    }
+
+    function saveAll(changesets, type, id){
+      var that = this;
+      return _.create(this, {
+        observable: rx.Observable.pairs(changesets)
+          .flatMap(function(changeset){
+            return that.save(changeset[0], changeset[1]).observable;
+          })
+          .count(function() { return true; })
+          .flatMap(function(count) {
+            console.log('%cSAVED', 'color: green; font-weight: bold', count, 'resources');
+            return that.getFromApiOnly(type, id).observable;
+          })
+      });
+    }
+
+    function save(path, object){
+      var that = this;
+      return _.create(this, {
+        observable: rx.Observable
+          .fromPromise(Restangular.oneUrl('resourcePath', pathUtils.concat([that.getParentPath(), path])).patch(object))
+          .flatMap(function (data) {
+            console.log('%cSaving', 'color: green; font-weight: bold', path, object, 'Response', data);
+            //TODO: Think about effects of caching objects that aren't used separately. They may only be accessed in a nested object.
+            return cache(data);
+          })
+      });
+    }
+
+    function cache(object){
+      object = object.plain();
+      object.skipNextChangeDetection = true;
+      return lokiDB.save(object.typeJsonapi, object);
+    }
+
     function parent(path){
       // Create new factory object that combines last parentPath and new parentPath
       return _.create(this, {parentPath: pathUtils.concat([this.parentPath, pathUtils.parse(path)])});
-    }
-
-    function currentRestangular(){
-      return Restangular.oneUrl('parentPath', this.getParentPath());
-    }
-
-    function getParentPath(){
-      return pathUtils.concat([basePath, this.parentPath]);
-    }
-
-    function findParentResourceOfChange(object, path){
-      var foundObj;
-      var changesPath = path;
-      var resourcePath = [];
-      _.forEachRight(path, function(pathItem, index){
-        var currentPath = _.slice(path, 0, index + 1);
-        var currentObj = _.get(object, currentPath);
-        if(currentObj && currentObj.id !== undefined && currentObj.typeJsonapi !== undefined){
-          if(!foundObj){
-            foundObj = currentObj;
-            changesPath = _.slice(path, index + 1);
-          }
-          resourcePath.unshift(currentObj.id);
-          resourcePath.unshift(currentObj.typeJsonapi);
-        }
-      });
-      if(!foundObj) {
-        foundObj = object;
-      }
-      if(object.id === undefined || object.typeJsonapi === undefined){
-        throw new Error('No object containing an id and typeJsonapi was found');
-      }
-      resourcePath.unshift(object.id);
-      resourcePath.unshift(object.typeJsonapi);
-      return {object: foundObj, changesPath: changesPath, resourcePath: resourcePath};
     }
 
     function bind($scope, path, type){
@@ -156,85 +192,50 @@
         observable: this.observable.merge(changesetStream)
           .safeApply($scope, function (data) {
             if (performingInitialLoadFromCache && data !== undefined) {
-                console.log('%cInitializing cache to scope', 'color: purple', data);
-                _.set($scope, path, data);
-                data.skipNextChangeDetection = true;
-                performingInitialLoadFromCache = false;
+              console.log('%cInitializing cache to scope', 'color: purple', data);
+              _.set($scope, path, data);
+              data.skipNextChangeDetection = true;
+              performingInitialLoadFromCache = false;
             }
           })
       });
     }
 
-    // Emit value retrieved from cache and then request, cache, and emit value from API
-    function get(type, id){
-      return _.create(this, {observable: lokiDB.get(type, id).concat(this.getFromApiOnly(type, id).observable)});
+    function currentRestangular(){
+      return Restangular.oneUrl('parentPath', this.getParentPath());
     }
 
-    function getFromApiOnly(type, id){
-      return _.create(this, {
-        observable: rx.Observable
-          .fromPromise(this.currentRestangular().one(type, id).get())
-          .flatMap(function (data) {
-            return cache(data);
-          })
+    function getParentPath(){
+      return pathUtils.concat([basePath, this.parentPath]);
+    }
+
+    function findParentResourceOfChange(object, path){
+      var foundObj;
+      var changesPath = path;
+      var resourcePath = [];
+      _.forEachRight(path, function(pathItem, index){
+        var currentPath = _.slice(path, 0, index + 1);
+        var currentObj = _.get(object, currentPath);
+        if(currentObj && currentObj.id !== undefined && currentObj.typeJsonapi !== undefined){
+          if(!foundObj){
+            foundObj = currentObj;
+            changesPath = _.slice(path, index + 1);
+          }
+          resourcePath.unshift(currentObj.id);
+          resourcePath.unshift(currentObj.typeJsonapi);
+        }
       });
+      if(!foundObj) {
+        foundObj = object;
+      }
+      if(object.id === undefined || object.typeJsonapi === undefined){
+        throw new Error('No object containing an id and typeJsonapi was found');
+      }
+      resourcePath.unshift(object.id);
+      resourcePath.unshift(object.typeJsonapi);
+      return {object: foundObj, changesPath: changesPath, resourcePath: resourcePath};
     }
 
-    // Emit values retrieved from cache and then request, save, and emit value from API
-    function search(type, query, order){
-      var apiResult = rx.Observable
-        .fromPromise(this.currentRestangular().all(type).getList())
-        // cache each item
-        .tap(function(data){
-          console.log('tap', data);
-        })
-        .flatMap(function(data){
-          console.log('flatMap', data);
-          return cache(data);
-        })
-        .toArray();
-
-      return _.create(this, {
-        observable: lokiDB.search(type, query, order)
-          .concat(apiResult.flatMap(function() {
-            return lokiDB.search(type, query, order);
-          }))
-      });
-    }
-
-    function saveAll(changesets, type, id){
-      var that = this;
-      return _.create(this, {
-        observable: rx.Observable.pairs(changesets)
-          .flatMap(function(changeset){
-            return that.save(changeset[0], changeset[1]).observable;
-          })
-          .count(function() { return true; })
-          .flatMap(function(count) {
-            console.log('%cSAVED', 'color: green; font-weight: bold', count, 'resources');
-            return that.getFromApiOnly(type, id).observable;
-          })
-      });
-    }
-
-    function save(path, object){
-      var that = this;
-      return _.create(this, {
-        observable: rx.Observable
-          .fromPromise(Restangular.oneUrl('resourcePath', pathUtils.concat([that.getParentPath(), path])).patch(object))
-          .flatMap(function (data) {
-            console.log('%cSaving', 'color: green; font-weight: bold', path, object, 'Response', data);
-            //TODO: Think about effects of caching objects that aren't used separately. They may only be accessed in a nested object.
-            return cache(data);
-          })
-      });
-    }
-
-    function cache(object){
-      object = object.plain();
-      object.skipNextChangeDetection = true;
-      return lokiDB.save(object.typeJsonapi, object);
-    }
   }
 
 })();
