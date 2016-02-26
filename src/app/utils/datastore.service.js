@@ -66,7 +66,7 @@
     function bind($scope, path, type){
       var that = this;
       var currentObjectState;
-      var initialLoadFromCache = false;
+      var performingInitialLoadFromCache = true;
 
       //Initialize with empty object so there is never a change where the lhs is nonexistent
       _.set($scope, path, {});
@@ -74,20 +74,18 @@
       var changesStream = observeOnScope($scope, path, true)
       // Filter out this change if the scope was just updated by an API response
         .filter(function(watch){
-          if(watch.oldValue === watch.newValue){
-            return false;
-          }
-          if(watch.newValue.skipNextChangeDetection){
+          if(watch.oldValue === watch.newValue || watch.newValue.skipNextChangeDetection){
             _.unset($scope, path + '.skipNextChangeDetection');
             return false;
           }else{
             return true;
           }
         })
-        .map(function(watch){
+        .tap(function(watch){
           //Save whole object to be referenced later
           currentObjectState = watch.newValue;
-
+        })
+        .map(function(watch){
           //Return the diff between the $watch's oldValue and newValue
           return deepDiff.diff(watch.oldValue, watch.newValue, function preFilter(path, key){
             //ignore properties prefixed with $ and fields added by 3rd party libraries
@@ -117,6 +115,7 @@
             .reduce(function(acc, change){
               switch(change.kind){
                 case 'N': //New
+                  $log.warning('Handling new change type as an edit', change);
                 case 'E': //Edit
                   var objectChanges = findParentResourceOfChange(currentObjectState, change.path);
                   var resourcePath = _.join(objectChanges.resourcePath, '/');
@@ -133,8 +132,11 @@
                    console.log('send DELETE to', change.path[0] + '/' + change.rhs.id);
                    }*/
                   break;
-                default: //TODO: need to add type 'A' (Array Change)
-                  $log.error('Change type not handled', change);
+                case 'A': //Array
+                  $log.error('Array change type not handled', change);
+                  break;
+                default:
+                  $log.error('Unknown change type', change);
                   break;
               }
               return acc;
@@ -147,17 +149,17 @@
               return that.saveAll(changesets, currentObjectState.typeJsonapi, currentObjectState.id).observable;
             });
         });
-      changesStream.connect(); //Connect to hot observable so both the changesetStream and it's window us the same observable
+      changesStream.connect(); //Connect to hot observable so both the changesetStream and it's window use the same observable
 
       //Merge in results from saving changesets and apply updates from API to scope
       return _.create(this, {
         observable: this.observable.merge(changesetStream)
           .safeApply($scope, function (data) {
-            if (!initialLoadFromCache) {
-              console.log('%cInitializing cache to scope', 'color: purple', data);
-              data.skipNextChangeDetection = true;
-              _.set($scope, path, data);
-              initialLoadFromCache = true;
+            if (performingInitialLoadFromCache && data !== undefined) {
+                console.log('%cInitializing cache to scope', 'color: purple', data);
+                _.set($scope, path, data);
+                data.skipNextChangeDetection = true;
+                performingInitialLoadFromCache = false;
             }
           })
       });
@@ -183,7 +185,11 @@
       var apiResult = rx.Observable
         .fromPromise(this.currentRestangular().all(type).getList())
         // cache each item
+        .tap(function(data){
+          console.log('tap', data);
+        })
         .flatMap(function(data){
+          console.log('flatMap', data);
           return cache(data);
         })
         .toArray();
@@ -198,7 +204,6 @@
 
     function saveAll(changesets, type, id){
       var that = this;
-      //TODO: handle combining and returning when all done in Rx.js
       return _.create(this, {
         observable: rx.Observable.pairs(changesets)
           .flatMap(function(changeset){

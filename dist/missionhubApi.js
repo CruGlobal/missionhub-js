@@ -459,7 +459,7 @@
     function bind($scope, path, type){
       var that = this;
       var currentObjectState;
-      var initialLoadFromCache = false;
+      var performingInitialLoadFromCache = true;
 
       //Initialize with empty object so there is never a change where the lhs is nonexistent
       _.set($scope, path, {});
@@ -467,20 +467,18 @@
       var changesStream = observeOnScope($scope, path, true)
       // Filter out this change if the scope was just updated by an API response
         .filter(function(watch){
-          if(watch.oldValue === watch.newValue){
-            return false;
-          }
-          if(watch.newValue.skipNextChangeDetection){
+          if(watch.oldValue === watch.newValue || watch.newValue.skipNextChangeDetection){
             _.unset($scope, path + '.skipNextChangeDetection');
             return false;
           }else{
             return true;
           }
         })
-        .map(function(watch){
+        .tap(function(watch){
           //Save whole object to be referenced later
           currentObjectState = watch.newValue;
-
+        })
+        .map(function(watch){
           //Return the diff between the $watch's oldValue and newValue
           return deepDiff.diff(watch.oldValue, watch.newValue, function preFilter(path, key){
             //ignore properties prefixed with $ and fields added by 3rd party libraries
@@ -510,6 +508,7 @@
             .reduce(function(acc, change){
               switch(change.kind){
                 case 'N': //New
+                  $log.warning('Handling new change type as an edit', change);
                 case 'E': //Edit
                   var objectChanges = findParentResourceOfChange(currentObjectState, change.path);
                   var resourcePath = _.join(objectChanges.resourcePath, '/');
@@ -526,8 +525,11 @@
                    console.log('send DELETE to', change.path[0] + '/' + change.rhs.id);
                    }*/
                   break;
-                default: //TODO: need to add type 'A' (Array Change)
-                  $log.error('Change type not handled', change);
+                case 'A': //Array
+                  $log.error('Array change type not handled', change);
+                  break;
+                default:
+                  $log.error('Unknown change type', change);
                   break;
               }
               return acc;
@@ -540,17 +542,17 @@
               return that.saveAll(changesets, currentObjectState.typeJsonapi, currentObjectState.id).observable;
             });
         });
-      changesStream.connect(); //Connect to hot observable so both the changesetStream and it's window us the same observable
+      changesStream.connect(); //Connect to hot observable so both the changesetStream and it's window use the same observable
 
       //Merge in results from saving changesets and apply updates from API to scope
       return _.create(this, {
         observable: this.observable.merge(changesetStream)
           .safeApply($scope, function (data) {
-            if (!initialLoadFromCache) {
-              console.log('%cInitializing cache to scope', 'color: purple', data);
-              data.skipNextChangeDetection = true;
-              _.set($scope, path, data);
-              initialLoadFromCache = true;
+            if (performingInitialLoadFromCache && data !== undefined) {
+                console.log('%cInitializing cache to scope', 'color: purple', data);
+                _.set($scope, path, data);
+                data.skipNextChangeDetection = true;
+                performingInitialLoadFromCache = false;
             }
           })
       });
@@ -576,7 +578,11 @@
       var apiResult = rx.Observable
         .fromPromise(this.currentRestangular().all(type).getList())
         // cache each item
+        .tap(function(data){
+          console.log('tap', data);
+        })
         .flatMap(function(data){
+          console.log('flatMap', data);
           return cache(data);
         })
         .toArray();
@@ -591,7 +597,6 @@
 
     function saveAll(changesets, type, id){
       var that = this;
-      //TODO: handle combining and returning when all done in Rx.js
       return _.create(this, {
         observable: rx.Observable.pairs(changesets)
           .flatMap(function(changeset){
@@ -626,6 +631,249 @@
   }
   datastoreService.$inject = ["apiConfig", "$log", "_", "pathUtils", "lokiDB", "rx", "Restangular", "observeOnScope", "deepDiff"];
 
+})();
+
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api.filters', []);
+
+})();
+
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api.filters')
+    .filter('tel', tel);
+
+  /** @ngInject */
+  function tel() {
+    return function (tel) {
+      if (!tel) { return ''; }
+
+      var value = tel.toString().trim().replace(/^\+/, '');
+
+      if (value.match(/[^0-9]/)) {
+        return tel;
+      }
+
+      var country, city, number;
+
+      switch (value.length) {
+        case 10: // +1PPP####### -> C (PPP) ###-####
+          country = 1;
+          city = value.slice(0, 3);
+          number = value.slice(3);
+          break;
+
+        case 11: // +CPPP####### -> CCC (PP) ###-####
+          country = value[0];
+          city = value.slice(1, 4);
+          number = value.slice(4);
+          break;
+
+        case 12: // +CCCPP####### -> CCC (PP) ###-####
+          country = value.slice(0, 3);
+          city = value.slice(3, 5);
+          number = value.slice(5);
+          break;
+
+        default:
+          return tel;
+      }
+
+      if (country === 1) {
+        country = "";
+      }
+
+      number = number.slice(0, 3) + '-' + number.slice(3);
+
+      return (country + " (" + city + ") " + number).trim();
+    };
+  }
+})();
+
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api.filters')
+    .filter('surveyName', surveyName);
+
+  /** @ngInject */
+  function surveyName(api, lodash) {
+    return function (answerSheet) {
+      if (!answerSheet) {
+        return '';
+      }
+
+      var currentOrg = api.currentOrg();
+      var survey = lodash.find(currentOrg.surveys, {id: answerSheet.survey_id});
+
+      return lodash.result(survey, 'title', '');
+    };
+  }
+  surveyName.$inject = ["api", "lodash"];
+})();
+
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api.filters')
+    .filter('personPrimaryPhone', personPrimaryPhone);
+
+  /** @ngInject */
+  function personPrimaryPhone() {
+    return function (person) {
+
+      if (!person || !person.phone_numbers || person.phone_numbers.length === 0) {
+        return '';
+      }
+      var i = 0;
+      while (i < person.phone_numbers.length) {
+        if(person.phone_numbers[i].primary){
+          return person.phone_numbers[i].number;
+        }
+        i++;
+      }
+      return person.phone_numbers[0].number;
+    };
+  }
+})();
+
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api.filters')
+    .filter('personFullname', personFullname);
+
+  /** @ngInject */
+  function personFullname() {
+    return function(person) {
+      if (!person || !person.first_name) {
+        return '';
+      }
+      return person.first_name + ' ' + person.last_name;
+    };
+  }
+})();
+
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api.filters')
+    .filter('personAvatar', personAvatar);
+
+  /** @ngInject */
+  function personAvatar() {
+    return function (person, size) {
+      size = size || 40;
+
+      if (!person || !person.first_name) {
+        return '';
+      }
+      if (person.picture) {
+        return person.picture + '?width=' + size + '&height=' + size;
+      }
+
+      // from http://stackoverflow.com/a/16348977/879524
+      var colour = '444444';
+      // str to hash
+      for (var i = 0, hash = 0; i < person.first_name.length; hash = person.first_name.charCodeAt(i++) + ((hash << 5) - hash));
+      // int/hash to hex
+      for (var i = 0, colour = ""; i < 3; colour += ("00" + ((hash >> i++ * 8) & 0xFF).toString(16)).slice(-2));
+
+      return "https://avatars.discourse.org/letter/" + person.first_name.slice(0, 1) + "/" + colour +
+        "/" + size + ".png";
+    };
+  }
+})();
+
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api.filters')
+    .filter('interactionPrimaryInitiator', interactionPrimaryInitiator);
+
+  /** @ngInject */
+  function interactionPrimaryInitiator() {
+    return function (interaction) {
+      if (!interaction) {
+        return {};
+      }
+
+      if (interaction.initiators[0]) {
+        return interaction.initiators[0];
+      } else if (interaction.creator) {
+        return interaction.creator;
+      }
+
+      return {};
+    };
+  }
+})();
+
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api.filters')
+    .filter('googleMapsAddress', googleMapsAddress);
+
+  /** @ngInject */
+  function googleMapsAddress() {
+    return function (address) {
+      var mailingAddress = 'http://maps.google.com/maps?q=';
+
+      if (address.address1) {
+        mailingAddress += address.address1 + '+';
+      }
+
+      if (address.address2) {
+        mailingAddress += address.address2 + '+';
+      }
+
+      if (address.city) {
+        mailingAddress += address.city + ',+';
+      }
+
+      if (address.state) {
+        mailingAddress += address.state + '+';
+      }
+
+      if (address.country) {
+        mailingAddress += address.country;
+      }
+
+      //remove trailing <br/>
+      if (mailingAddress.lastIndexOf('+') === mailingAddress.length - 1) {
+        mailingAddress = mailingAddress.slice(0, -1);
+      }
+
+      return mailingAddress;
+    };
+  }
+})();
+
+(function() {
+  'use strict';
+
+  angular
+    .module('missionhub.api.filters')
+    .filter('backgroundStyle', backgroundStyle);
+
+  /** @ngInject */
+  function backgroundStyle() {
+    return function (url) {
+      return 'background-image: url(' + url + ')';
+    };
+  }
 })();
 
 (function() {
@@ -914,7 +1162,7 @@
   'use strict';
 
   angular
-    .module('missionhub.api.filters', []);
+    .module('missionhub.api.config', []);
 
 })();
 
@@ -922,235 +1170,9 @@
   'use strict';
 
   angular
-    .module('missionhub.api.filters')
-    .filter('tel', tel);
+    .module('missionhub.api.config')
+    .constant('apiConfig', {baseUrl: '/'});
 
-  /** @ngInject */
-  function tel() {
-    return function (tel) {
-      if (!tel) { return ''; }
-
-      var value = tel.toString().trim().replace(/^\+/, '');
-
-      if (value.match(/[^0-9]/)) {
-        return tel;
-      }
-
-      var country, city, number;
-
-      switch (value.length) {
-        case 10: // +1PPP####### -> C (PPP) ###-####
-          country = 1;
-          city = value.slice(0, 3);
-          number = value.slice(3);
-          break;
-
-        case 11: // +CPPP####### -> CCC (PP) ###-####
-          country = value[0];
-          city = value.slice(1, 4);
-          number = value.slice(4);
-          break;
-
-        case 12: // +CCCPP####### -> CCC (PP) ###-####
-          country = value.slice(0, 3);
-          city = value.slice(3, 5);
-          number = value.slice(5);
-          break;
-
-        default:
-          return tel;
-      }
-
-      if (country === 1) {
-        country = "";
-      }
-
-      number = number.slice(0, 3) + '-' + number.slice(3);
-
-      return (country + " (" + city + ") " + number).trim();
-    };
-  }
-})();
-
-(function() {
-  'use strict';
-
-  angular
-    .module('missionhub.api.filters')
-    .filter('surveyName', surveyName);
-
-  /** @ngInject */
-  function surveyName(api, lodash) {
-    return function (answerSheet) {
-      if (!answerSheet) {
-        return '';
-      }
-
-      var currentOrg = api.currentOrg();
-      var survey = lodash.find(currentOrg.surveys, {id: answerSheet.survey_id});
-
-      return lodash.result(survey, 'title', '');
-    };
-  }
-  surveyName.$inject = ["api", "lodash"];
-})();
-
-(function() {
-  'use strict';
-
-  angular
-    .module('missionhub.api.filters')
-    .filter('personPrimaryPhone', personPrimaryPhone);
-
-  /** @ngInject */
-  function personPrimaryPhone() {
-    return function (person) {
-
-      if (!person || !person.phone_numbers || person.phone_numbers.length === 0) {
-        return '';
-      }
-      var i = 0;
-      while (i < person.phone_numbers.length) {
-        if(person.phone_numbers[i].primary){
-          return person.phone_numbers[i].number;
-        }
-        i++;
-      }
-      return person.phone_numbers[0].number;
-    };
-  }
-})();
-
-(function() {
-  'use strict';
-
-  angular
-    .module('missionhub.api.filters')
-    .filter('personFullname', personFullname);
-
-  /** @ngInject */
-  function personFullname() {
-    return function(person) {
-      if (!person || !person.first_name) {
-        return '';
-      }
-      return person.first_name + ' ' + person.last_name;
-    };
-  }
-})();
-
-(function() {
-  'use strict';
-
-  angular
-    .module('missionhub.api.filters')
-    .filter('personAvatar', personAvatar);
-
-  /** @ngInject */
-  function personAvatar() {
-    return function (person, size) {
-      size = size || 40;
-
-      if (!person || !person.first_name) {
-        return '';
-      }
-      if (person.picture) {
-        return person.picture + '?width=' + size + '&height=' + size;
-      }
-
-      // from http://stackoverflow.com/a/16348977/879524
-      var colour = '444444';
-      // str to hash
-      for (var i = 0, hash = 0; i < person.first_name.length; hash = person.first_name.charCodeAt(i++) + ((hash << 5) - hash));
-      // int/hash to hex
-      for (var i = 0, colour = ""; i < 3; colour += ("00" + ((hash >> i++ * 8) & 0xFF).toString(16)).slice(-2));
-
-      return "https://avatars.discourse.org/letter/" + person.first_name.slice(0, 1) + "/" + colour +
-        "/" + size + ".png";
-    };
-  }
-})();
-
-(function() {
-  'use strict';
-
-  angular
-    .module('missionhub.api.filters')
-    .filter('interactionPrimaryInitiator', interactionPrimaryInitiator);
-
-  /** @ngInject */
-  function interactionPrimaryInitiator() {
-    return function (interaction) {
-      if (!interaction) {
-        return {};
-      }
-
-      if (interaction.initiators[0]) {
-        return interaction.initiators[0];
-      } else if (interaction.creator) {
-        return interaction.creator;
-      }
-
-      return {};
-    };
-  }
-})();
-
-(function() {
-  'use strict';
-
-  angular
-    .module('missionhub.api.filters')
-    .filter('googleMapsAddress', googleMapsAddress);
-
-  /** @ngInject */
-  function googleMapsAddress() {
-    return function (address) {
-      var mailingAddress = 'http://maps.google.com/maps?q=';
-
-      if (address.address1) {
-        mailingAddress += address.address1 + '+';
-      }
-
-      if (address.address2) {
-        mailingAddress += address.address2 + '+';
-      }
-
-      if (address.city) {
-        mailingAddress += address.city + ',+';
-      }
-
-      if (address.state) {
-        mailingAddress += address.state + '+';
-      }
-
-      if (address.country) {
-        mailingAddress += address.country;
-      }
-
-      //remove trailing <br/>
-      if (mailingAddress.lastIndexOf('+') === mailingAddress.length - 1) {
-        mailingAddress = mailingAddress.slice(0, -1);
-      }
-
-      return mailingAddress;
-    };
-  }
-})();
-
-(function() {
-  'use strict';
-
-  angular
-    .module('missionhub.api.filters')
-    .filter('backgroundStyle', backgroundStyle);
-
-  /** @ngInject */
-  function backgroundStyle() {
-    return function (url) {
-      return 'background-image: url(' + url + ')';
-    };
-  }
 })();
 
 (function() {
@@ -1255,23 +1277,6 @@
   }
 })();
 
-
-(function() {
-  'use strict';
-
-  angular
-    .module('missionhub.api.config', []);
-
-})();
-
-(function() {
-  'use strict';
-
-  angular
-    .module('missionhub.api.config')
-    .constant('apiConfig', {baseUrl: '/'});
-
-})();
 
 (function() {
   'use strict';
