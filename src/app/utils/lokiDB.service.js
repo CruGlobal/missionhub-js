@@ -104,8 +104,9 @@
           var existing = collection.by('id', object.id);
           var updatedObj;
           if(existing){
-            existing = _.merge(existing, object);
-            updatedObj = collection.update(existing);
+            object.$loki = existing.$loki;
+            object.meta = _.create(existing.meta);
+            updatedObj = collection.update(object);
           }else{
             updatedObj = collection.insert(object);
           }

@@ -119,6 +119,37 @@
             resourcePath: ['people', 1, 'addresses', 2, 'deeperObject', 3]
           });
       });
+      it('should take a newResourceType and look for a part of the path that matches (used for creating new objects)', function(){
+        var object = {
+          id: 1,
+          typeJsonapi: 'people',
+          addresses: [
+            {
+              id: 2,
+              typeJsonapi: 'addresses',
+              city: 'San Francisco'
+            },
+            {
+              city: 'New'
+            }
+          ]
+        };
+        expect(self.datastore._findParentResourceOfChange(object, ['addresses', 1], 'addresses'))
+          .toEqual({
+            object: [
+              {
+                id: 2,
+                typeJsonapi: 'addresses',
+                city: 'San Francisco'
+              },
+              {
+                city: 'New'
+              }
+            ],
+            changesPath: [1],
+            resourcePath: ['people', 1, 'addresses']
+          });
+      });
     });
   });
 })();

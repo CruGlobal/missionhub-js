@@ -60,26 +60,29 @@
       });
     }
 
-    function saveAll(changesets, type, id){
+    function saveAll(changesets, create){
+      create = create || false;
       var that = this;
       return _.create(this, {
         observable: rx.Observable.pairs(changesets)
           .flatMap(function(changeset){
-            return that.save(changeset[0], changeset[1]).observable;
-          })
-          .count(function() { return true; })
-          .flatMap(function(count) {
-            console.log('%cSAVED', 'color: green; font-weight: bold', count, 'resources');
-            return that.getFromApiOnly(type, id).observable;
+            return that.save(changeset[0], changeset[1], create).observable;
           })
       });
     }
 
-    function save(path, object){
+    function save(path, object, create){
+      create = create || false;
       var that = this;
+      var restangularRequest;
+      if(create){
+        restangularRequest = Restangular.oneUrl('resourcePath', pathUtils.concat([that.getParentPath(), path])).post('', object);
+      }else {
+        restangularRequest = Restangular.oneUrl('resourcePath', pathUtils.concat([that.getParentPath(), path])).patch(object);
+      }
       return _.create(this, {
         observable: rx.Observable
-          .fromPromise(Restangular.oneUrl('resourcePath', pathUtils.concat([that.getParentPath(), path])).patch(object))
+          .fromPromise(restangularRequest)
           .flatMap(function (data) {
             console.log('%cSaving', 'color: green; font-weight: bold', path, object, 'Response', data);
             //TODO: Think about effects of caching objects that aren't used separately. They may only be accessed in a nested object.
@@ -90,7 +93,7 @@
 
     function cache(object){
       object = object.plain();
-      object.skipNextChangeDetection = true;
+      object.$skipNextChangeDetection = true;
       return lokiDB.save(object.typeJsonapi, object);
     }
 
@@ -102,7 +105,6 @@
     function bind($scope, path, type){
       var that = this;
       var currentObjectState;
-      var performingInitialLoadFromCache = true;
 
       //Initialize with empty object so there is never a change where the lhs is nonexistent
       _.set($scope, path, {});
@@ -110,8 +112,8 @@
       var changesStream = observeOnScope($scope, path, true)
       // Filter out this change if the scope was just updated by an API response
         .filter(function(watch){
-          if(watch.oldValue === watch.newValue || watch.newValue.skipNextChangeDetection){
-            _.unset($scope, path + '.skipNextChangeDetection');
+          if(watch.oldValue === watch.newValue || watch.newValue.$skipNextChangeDetection){
+            _.unset($scope, path + '.$skipNextChangeDetection');
             return false;
           }else{
             return true;
@@ -128,7 +130,7 @@
             return key[0] === '$' ||
               _.includes(
                 //TODO: remove interactions and messages
-                ['meta', 'interactions', 'messages', 'skipNextChangeDetection'],
+                ['meta', 'interactions', 'messages'],
                 key
               );
           });
@@ -144,23 +146,25 @@
         .publish();
       var changesetStream = changesStream
       //Wait until stream has been quiet for 500ms and then emit everything since the last window emitted
-        .window(changesStream.debounce(500))
+        .window(changesStream.debounce(5000))
         //Reduce window of diffs into a single changeset object
         .flatMap(function (changesGroup) {
           return changesGroup
             .reduce(function(acc, change){
               switch(change.kind){
                 case 'N': //New
-                  $log.warning('Handling new change type as an edit', change);
+                  $log.warn('Handling new change type as an edit', change);
                 case 'E': //Edit
                   var objectChanges = findParentResourceOfChange(currentObjectState, change.path);
                   var resourcePath = _.join(objectChanges.resourcePath, '/');
                   //Add id and type to initial changeset object
-                  acc[resourcePath] = acc[resourcePath] || {id: objectChanges.object.id, typeJsonapi: objectChanges.object.typeJsonapi};
-                  _.set(acc[resourcePath], objectChanges.changesPath, change.rhs);
+                  acc.update[resourcePath] = acc.update[resourcePath] || {id: objectChanges.object.id, typeJsonapi: objectChanges.object.typeJsonapi};
+                  _.set(acc.update[resourcePath], objectChanges.changesPath, change.rhs);
                   break;
                 case 'D': //Delete
-                  $log.error('Change type not handled', change);
+                  var objectChanges = findParentResourceOfChange(currentObjectState, change.path);
+                  var resourcePath = _.join(objectChanges.resourcePath, '/');
+                  $log.error('Change type not handled', change, resourcePath);
                   /*if(!isRelated) {
                    //TODO: see if setting attribute to null is a good persistence strategy for the API
                    _.set(acc, change.path, null);
@@ -169,20 +173,44 @@
                    }*/
                   break;
                 case 'A': //Array
-                  $log.error('Array change type not handled', change);
+                  var typeJsonapi = _.last(change.path);
+                  switch(change.item.kind){
+                    case 'N': //New
+                      var objectChanges = findParentResourceOfChange(currentObjectState, change.path, typeJsonapi);
+                      var resourcePath = _.join(objectChanges.resourcePath, '/');
+                      acc.create[resourcePath] = _.defaults({typeJsonapi: typeJsonapi}, _.omitBy(change.item.rhs, function(value, key){ return key[0] === '$' }));
+                      break;
+                    default:
+                      $log.error('Unhandled array change type', change);
+                      break;
+                  }
                   break;
                 default:
                   $log.error('Unknown change type', change);
                   break;
               }
               return acc;
-            }, {})
+            }, {update: {}, create: {}})
             .filter(function(changesets){
-              return !_.isEmpty(changesets);
+              return !_.isEmpty(changesets.create) || !_.isEmpty(changesets.update);
             })
             .flatMap(function(changesets){
-              //Send these changesets to API using PATCH
-              return that.saveAll(changesets, currentObjectState.typeJsonapi, currentObjectState.id).observable;
+              var source = Rx.Observable.empty();
+              console.info('%cResources to create', 'color: blue', changesets.create);
+              if(!_.isEmpty(changesets.create)){
+                //Send create changesets to API using POST
+                source = source.merge(that.saveAll(changesets.create, true).observable);
+              }
+              if(!_.isEmpty(changesets.update)) {
+                //Send update changesets to API using PATCH
+                source = source.merge(that.saveAll(changesets.update).observable);
+              }
+              return source
+                .count(function() { return true; }) //Wait until all observables have completed
+                .flatMap(function(count) {
+                  console.log('%cPerformed', 'color: green; font-weight: bold', count, ' create/update operations');
+                  return that.getFromApiOnly(currentObjectState.typeJsonapi, currentObjectState.id).observable;
+                })
             });
         });
       changesStream.connect(); //Connect to hot observable so both the changesetStream and it's window use the same observable
@@ -191,11 +219,10 @@
       return _.create(this, {
         observable: this.observable.merge(changesetStream)
           .safeApply($scope, function (data) {
-            if (performingInitialLoadFromCache && data !== undefined) {
-              console.log('%cInitializing cache to scope', 'color: purple', data);
+            if (data !== undefined) {
+              console.log('%cLoading cache into scope', 'color: purple', data);
               _.set($scope, path, data);
-              data.skipNextChangeDetection = true;
-              performingInitialLoadFromCache = false;
+              data.$skipNextChangeDetection = true;
             }
           })
       });
@@ -209,20 +236,24 @@
       return pathUtils.concat([basePath, this.parentPath]);
     }
 
-    function findParentResourceOfChange(object, path){
+    function findParentResourceOfChange(object, path, newResourceType){
       var foundObj;
       var changesPath = path;
       var resourcePath = [];
       _.forEachRight(path, function(pathItem, index){
         var currentPath = _.slice(path, 0, index + 1);
         var currentObj = _.get(object, currentPath);
-        if(currentObj && currentObj.id !== undefined && currentObj.typeJsonapi !== undefined){
+        if(currentObj && (currentObj.id !== undefined && currentObj.typeJsonapi !== undefined || newResourceType === pathItem)){
           if(!foundObj){
             foundObj = currentObj;
             changesPath = _.slice(path, index + 1);
           }
-          resourcePath.unshift(currentObj.id);
-          resourcePath.unshift(currentObj.typeJsonapi);
+          if(newResourceType === pathItem){
+            resourcePath.unshift(newResourceType);
+          }else {
+            resourcePath.unshift(currentObj.id);
+            resourcePath.unshift(currentObj.typeJsonapi);
+          }
         }
       });
       if(!foundObj) {

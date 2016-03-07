@@ -72,7 +72,7 @@
           return jsonapi.deserialize(data, url);
         });
         Restangular.addRequestInterceptor(function(data, operation) {
-          if(operation === 'patch'){
+          if(operation === 'post' || operation === 'patch'){
             return jsonapi.serialize(data);
           }else{
             return data;
